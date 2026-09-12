@@ -1,20 +1,40 @@
 import type { Metadata } from "next";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { fetchEmployeeDirectory } from "@/lib/hr/directory";
+import { PageHeader } from "@/components/shared/page-header";
+import { ErrorState } from "@/components/shared/error-state";
+import { Badge } from "@/components/ui/badge";
+import { EmployeeDirectory } from "@/components/hr/employee-directory";
 
 export const metadata: Metadata = { title: "Employees" };
 
-export default function EmployeesPage() {
+export const dynamic = "force-dynamic";
+
+export default async function EmployeesPage() {
+  let employees;
+  try {
+    employees = await fetchEmployeeDirectory();
+  } catch (error) {
+    return (
+      <ErrorState
+        title="Couldn't load the employee directory"
+        message={
+          error instanceof Error
+            ? error.message
+            : "We couldn't reach Supabase to load your people. Please try again."
+        }
+      />
+    );
+  }
+
   return (
-    <FeaturePlaceholder
-      title="Employees"
-      description="The organization directory with rich profiles, teams, and history."
-      highlights={[
-        "Searchable employee directory with advanced filters",
-        "Rich profiles: role, team, skills, goals, and reviews",
-        "Manager and reporting-line org explorer",
-        "Lifecycle timeline from hire to offboarding",
-      ]}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Employees"
+        description="Search your entire workforce, filter by team, role, location, performance, risk, or skills."
+        badge={<Badge variant="secondary">{employees.length} people</Badge>}
+      />
+      <EmployeeDirectory employees={employees} />
+    </div>
   );
 }

@@ -14,7 +14,7 @@ import {
   roleLabels,
   type WorkspaceRole,
 } from "@/lib/auth/role";
-import { persistSignInRole } from "@/lib/auth/actions";
+import { resolveUserRole } from "@/lib/auth/actions";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -69,23 +69,32 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
       }
 
       if (data.user) {
-        // Record the chosen role on the user so /hr/* and /employee/* are
-        // enforced consistently, then refresh so the token claims include it.
-        const result = await persistSignInRole(data.user.id, role);
+        // The account's real role comes from the database — never from the
+        // role card clicked on the login screen.
+        const result = await resolveUserRole(data.user.id);
         if (!result.ok) {
+          await supabase.auth.signOut();
+          setLoading(false);
+          setNotice(`Sign-in failed: ${result.error}`);
+          return;
+        }
+        if (result.workspace !== role) {
+          await supabase.auth.signOut();
           setLoading(false);
           setNotice(
-            `Signed in, but your role could not be saved: ${result.error}. Try signing in again.`
+            `This account belongs to the ${roleLabels[result.workspace].toLowerCase()}. Go back, choose the "${roleLabels[result.workspace]}" option, and sign in there.`
           );
           return;
         }
+        // Claims may have been repaired to match the database — refresh so the
+        // proxy's role check on the next request sees them.
         await supabase.auth.refreshSession();
+        setLoading(false);
+        router.push(roleDashboard[result.workspace]);
+        router.refresh();
+        return;
       }
 
-      setLoading(false);
-      router.push(roleDashboard[role]);
-      router.refresh();
-      return;
     }
 
     // Demo mode: no Supabase configured — go straight to the role dashboard.

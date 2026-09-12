@@ -2,6 +2,16 @@ export type RiskLevel = "low" | "medium" | "high" | "critical";
 
 export type TrendDirection = "up" | "down" | "flat";
 
+export type InsightSeverity = "info" | "low" | "medium" | "high" | "critical";
+
+export type InsightCategory =
+  | "attrition"
+  | "performance"
+  | "engagement"
+  | "recruitment"
+  | "skills"
+  | "onboarding";
+
 export interface StatCardData {
   id: string;
   label: string;
@@ -32,10 +42,13 @@ export interface AiInsight {
   id: string;
   title: string;
   summary: string;
-  signals: { label: string; direction: "up" | "down"; severity: "positive" | "negative" | "neutral" }[];
+  signals?: { label: string; direction: "up" | "down"; severity: "positive" | "negative" | "neutral" }[];
+  evidence?: string[];
+  reasoning?: string;
   recommendedAction: string;
   confidence: number;
-  category: "attrition" | "performance" | "engagement" | "recruitment" | "skills" | "onboarding";
+  category: InsightCategory;
+  severity?: InsightSeverity;
 }
 
 export interface Employee {

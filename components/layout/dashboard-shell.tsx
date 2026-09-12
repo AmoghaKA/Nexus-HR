@@ -149,7 +149,7 @@ interface DashboardShellProps {
   variant: "hr" | "employee";
   user: DashboardUser;
   groups: NavGroup[];
-  switchTo: { href: string; label: string };
+  switchTo?: { href: string; label: string };
   children: React.ReactNode;
 }
 
@@ -286,12 +286,14 @@ export function DashboardShell({
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href={switchTo.href}>
-                    <UserRound className="h-4 w-4" />
-                    {switchTo.label}
-                  </Link>
-                </DropdownMenuItem>
+                {switchTo && (
+                  <DropdownMenuItem asChild>
+                    <Link href={switchTo.href}>
+                      <UserRound className="h-4 w-4" />
+                      {switchTo.label}
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 {variant === "employee" && (
                   <DropdownMenuItem asChild>
                     <Link href="/employee/profile">

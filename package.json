@@ -6,7 +6,10 @@
     "dev": "set NODE_OPTIONS=--max-http-header-size=65536&& next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed": "node --env-file=.env.local supabase/scripts/create-demo-users.mjs",
+    "seed:workforce": "node --env-file=.env.local supabase/scripts/seed-workforce.mjs",
+    "confirm:workforce": "node --env-file=.env.local supabase/scripts/confirm-workforce-users.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

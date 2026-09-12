@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { employeeNav, employeeUser } from "@/lib/navigation";
+import { employeeNav, employeeUser, type DashboardUser } from "@/lib/navigation";
+import { getSessionUser } from "@/lib/supabase/user";
 
 export const metadata: Metadata = {
   title: {
@@ -10,18 +11,20 @@ export const metadata: Metadata = {
   },
 };
 
-export default function EmployeeLayout({
+export default async function EmployeeLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getSessionUser();
+  const user: DashboardUser = {
+    name: session?.name ?? employeeUser.name,
+    email: session?.email || employeeUser.email,
+    role: session?.jobTitle ?? session?.roleLabel ?? employeeUser.role,
+  };
+
   return (
-    <DashboardShell
-      variant="employee"
-      user={employeeUser}
-      groups={employeeNav}
-      switchTo={{ href: "/hr/dashboard", label: "Switch to HR view" }}
-    >
+    <DashboardShell variant="employee" user={user} groups={employeeNav}>
       {children}
     </DashboardShell>
   );
