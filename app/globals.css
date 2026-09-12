@@ -1,26 +1,122 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  --color-gemini: var(--gemini);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --radius: 0.75rem;
+
+  --background: hsl(220 25% 97%);
+  --foreground: hsl(224 22% 12%);
+
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(224 22% 12%);
+
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(224 22% 12%);
+
+  --primary: hsl(243 68% 55%);
+  --primary-foreground: hsl(0 0% 100%);
+
+  --secondary: hsl(220 20% 95%);
+  --secondary-foreground: hsl(224 22% 14%);
+
+  --muted: hsl(220 18% 95%);
+  --muted-foreground: hsl(220 10% 46%);
+
+  --accent: hsl(243 60% 96%);
+  --accent-foreground: hsl(243 60% 34%);
+
+  --destructive: hsl(0 72% 51%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  --border: hsl(220 16% 89%);
+  --input: hsl(220 16% 86%);
+  --ring: hsl(243 68% 55%);
+
+  --success: hsl(160 76% 32%);
+  --warning: hsl(38 92% 50%);
+  --danger: hsl(0 72% 51%);
+  --info: hsl(199 89% 48%);
+
+  --gemini: hsl(243 68% 55%);
+
+  --chart-1: hsl(243 68% 55%);
+  --chart-2: hsl(199 89% 48%);
+  --chart-3: hsl(160 76% 32%);
+  --chart-4: hsl(38 92% 50%);
+  --chart-5: hsl(278 64% 58%);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "cv02";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizelegibility;
+}
+
+::selection {
+  background-color: hsl(243 68% 90%);
+  color: hsl(243 68% 30%);
+}
+
+@layer utilities {
+  .ai-gradient-border {
+    position: relative;
+    background:
+      linear-gradient(var(--card), var(--card)) padding-box,
+      linear-gradient(120deg, hsl(243 68% 55%), hsl(199 89% 48%), hsl(278 64% 58%))
+        border-box;
+    border: 1px solid transparent;
+  }
 }
