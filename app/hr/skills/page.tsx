@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
+import { SkillsAnalysis } from "@/components/hr/skills-analysis";
 
 export const metadata: Metadata = { title: "Skills" };
 
 export default function SkillsPage() {
   return (
-    <FeaturePlaceholder
-      title="Skills"
-      description="The company skill taxonomy, coverage, and gap analysis."
-      highlights={[
-        "Skill catalog with proficiency levels and verification",
-        "Organization-wide coverage heatmaps",
-        "Gap analysis mapped to growth plans and hiring",
-        "AI-suggested upskilling tracks per team",
-      ]}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Skills"
+        description="Company skill taxonomy, coverage, and AI-identified gaps mapped to upskilling tracks."
+        badge={<Badge variant="secondary">AI-powered</Badge>}
+      />
+      <SkillsAnalysis />
+    </div>
   );
 }

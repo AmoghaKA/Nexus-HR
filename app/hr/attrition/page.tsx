@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
+import { AttritionAnalysis } from "@/components/hr/attrition-analysis";
 
 export const metadata: Metadata = { title: "Attrition" };
 
 export default function AttritionPage() {
   return (
-    <FeaturePlaceholder
-      title="Attrition"
-      description="Predictive attrition risk scoring with explainable drivers and interventions."
-      highlights={[
-        "Per-employee risk scores with driver explanations",
-        "Department and segment rollups with alerts",
-        "AI-recommended retention interventions",
-        "Retention campaigns with outcome tracking",
-      ]}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Attrition"
+        description="Predictive attrition risk scoring with explainable drivers and AI-recommended interventions."
+        badge={<Badge variant="secondary">AI-powered</Badge>}
+      />
+      <AttritionAnalysis />
+    </div>
   );
 }

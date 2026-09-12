@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
+import { PolicyQA } from "@/components/hr/policy-qa";
 
 export const metadata: Metadata = { title: "Policies" };
 
 export default function PoliciesPage() {
   return (
-    <FeaturePlaceholder
-      title="Policies"
-      description="Versioned company policies with publishing and acknowledgement."
-      highlights={[
-        "Policy library with version history and approval flow",
-        "Targeted publishing to teams and regions",
-        "Acknowledgement tracking and reminders",
-        "AI question-answering over policy documents",
-      ]}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Policies"
+        description="Versioned company policies with AI question-answering grounded in the published documents."
+        badge={<Badge variant="secondary">AI-powered</Badge>}
+      />
+      <PolicyQA />
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { ArrowUpRight, Loader2, ShieldAlert, Sparkles } from "lucide-react";
 
 import { analyzeEmployee, type AnalyzeEmployeeResult } from "@/lib/ai/actions";
 import type { RiskLevel } from "@/types";
@@ -30,6 +30,23 @@ const severityDot: Record<string, string> = {
   info: "bg-muted-foreground",
 };
 
+function SectionList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h4>
+      <ul className="mt-1.5 space-y-1.5">
+        {items.map((item) => (
+          <li key={item} className="flex items-start gap-2 text-sm leading-relaxed">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function EmployeeAnalysisDialog({
   employeeId,
   employeeName,
@@ -49,6 +66,7 @@ export function EmployeeAnalysisDialog({
   }
 
   const pkg = result?.ok ? result.package : null;
+  const analysis = result?.ok ? result.analysis : null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -61,11 +79,10 @@ export function EmployeeAnalysisDialog({
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            AI Employee Briefing
+            AI Employee Analysis
           </DialogTitle>
           <DialogDescription>
-            Signals gathered live from Supabase for {employeeName}. The Gemini
-            narrative step comes next.
+            Supabase employee records → Gemini reasoning → structured, explainable profile.
           </DialogDescription>
         </DialogHeader>
 
@@ -117,19 +134,86 @@ export function EmployeeAnalysisDialog({
               ))}
             </div>
 
-            {pkg.insights.length > 0 ? (
+            {analysis && (
+              <>
+                <div className="rounded-lg border bg-card/60 p-4">
+                  <p className="text-sm leading-relaxed">{analysis.summary}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="outline">
+                      {Math.round(analysis.confidence * 100)}% confidence
+                    </Badge>
+                    <span className="flex items-center gap-1">
+                      Trend: {analysis.performance_trend.direction}
+                      <ArrowUpRight
+                        className={`h-3.5 w-3.5 ${
+                          analysis.performance_trend.direction === "up"
+                            ? "text-success"
+                            : analysis.performance_trend.direction === "down"
+                              ? "text-destructive"
+                              : ""
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <SectionList title="Strengths" items={analysis.strengths} />
+                  <SectionList title="Development areas" items={analysis.development_areas} />
+                  <SectionList title="Skill gaps" items={analysis.skill_gaps} />
+                  <SectionList title="Engagement signals" items={analysis.engagement_signals} />
+                </div>
+
+                {analysis.performance_trend.description && (
+                  <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                    <span className="font-medium text-card-foreground">Performance trend: </span>
+                    {analysis.performance_trend.description}
+                  </div>
+                )}
+
+                {analysis.risk_signals.length > 0 && (
+                  <div className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-warning">Risk signals</p>
+                    <ul className="mt-2 space-y-1.5">
+                      {analysis.risk_signals.map((signal) => (
+                        <li key={signal} className="flex items-start gap-2 text-sm leading-relaxed">
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+                          {signal}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {analysis.recommended_actions.length > 0 && (
+                  <div className="rounded-lg border bg-card/60 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Recommended actions
+                    </p>
+                    <ul className="mt-2 space-y-1.5">
+                      {analysis.recommended_actions.map((action) => (
+                        <li key={action} className="flex items-start gap-2 text-sm font-medium text-primary">
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                          {action}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+
+            {analysis && analysis.insights.length > 0 ? (
               <div className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Signals
+                  Structured insights
                 </h4>
-                {pkg.insights.map((insight) => (
-                  <div
-                    key={insight.id}
-                    className="rounded-lg border bg-card/60 p-3.5"
-                  >
+                {analysis.insights.map((insight, index) => (
+                  <div key={`${insight.title}-${index}`} className="rounded-lg border bg-card/60 p-3.5">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${severityDot[insight.severity ?? "info"]}`}
+                        className={`h-2 w-2 shrink-0 rounded-full ${severityDot[insight.severity] ?? "bg-muted-foreground"}`}
                         aria-hidden="true"
                       />
                       <p className="text-sm font-semibold">{insight.title}</p>
@@ -137,42 +221,43 @@ export function EmployeeAnalysisDialog({
                         {Math.round(insight.confidence * 100)}% confidence
                       </Badge>
                     </div>
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                      {insight.summary}
-                    </p>
-                    {insight.evidence && insight.evidence.length > 0 && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{insight.summary}</p>
+                    {insight.evidence.length > 0 && (
                       <ul className="mt-2 space-y-1">
                         {insight.evidence.slice(0, 3).map((item) => (
-                          <li
-                            key={item}
-                            className="flex items-start gap-1.5 text-xs text-muted-foreground"
-                          >
+                          <li key={item} className="flex items-start gap-1.5 text-xs text-muted-foreground">
                             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" />
                             {item}
                           </li>
                         ))}
                       </ul>
                     )}
-                    <p className="mt-2 text-xs font-medium text-primary">
-                      {insight.recommendedAction}
-                    </p>
+                    <p className="mt-2 text-xs font-medium text-primary">{insight.recommended_action}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                No notable signals — this profile looks steady.
-              </div>
+              !analysis && (
+                <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                  No AI analysis returned — review the raw signals above.
+                </div>
+              )
             )}
 
-            <details className="rounded-lg border bg-muted/30 p-3">
-              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-                View Gemini handoff prompt
-              </summary>
-              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-card-foreground">
-                  {result?.prompt}
-                </pre>
-            </details>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {typeof result?.saved === "number" && (
+                <Badge variant="success">{result.saved} insight(s) saved to ai_insights</Badge>
+              )}
+              {result?.persistError && (
+                <Badge variant="outline" className="text-destructive">Insights not persisted</Badge>
+              )}
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              AI analysis is an estimate from workforce records. It is not a definitive judgment — review with
+              the employee&apos;s manager before acting.
+            </div>
           </div>
         )}
       </DialogContent>

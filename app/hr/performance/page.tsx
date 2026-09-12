@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
+import { PerformanceAnalysis } from "@/components/hr/performance-analysis";
 
 export const metadata: Metadata = { title: "Performance" };
 
 export default function PerformancePage() {
   return (
-    <FeaturePlaceholder
-      title="Performance"
-      description="Review cycles, continuous feedback, and calibration across teams."
-      highlights={[
-        "Review cycles with self, peer, and manager inputs",
-        "Quarterly calibration and rating distributions",
-        "Continuous feedback pulse and sentiment trends",
-        "AI summary drafting for review documents",
-      ]}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Performance"
+        description="Review cycles, continuous feedback, and AI-summarized organizational performance."
+        badge={<Badge variant="secondary">AI-powered</Badge>}
+      />
+      <PerformanceAnalysis />
+    </div>
   );
 }

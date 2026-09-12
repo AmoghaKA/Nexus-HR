@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
+import { RecruitmentAnalysis } from "@/components/hr/recruitment-analysis";
 
 export const metadata: Metadata = { title: "Recruitment" };
 
 export default function RecruitmentPage() {
   return (
-    <FeaturePlaceholder
-      title="Recruitment"
-      description="End-to-end candidate pipeline management, sourcing, and offers."
-      highlights={[
-        "Candidate profiles and pipeline stages per open role",
-        "Interview scheduling and feedback capture",
-        "Offer management integrated with onboarding",
-        "AI-assisted role-fit scoring and bias-checked shortlists",
-      ]}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Recruitment"
+        description="AI-assisted role-fit scoring, question sets, and consolidated interview evaluations."
+        badge={<Badge variant="secondary">AI-powered</Badge>}
+      />
+      <RecruitmentAnalysis />
+    </div>
   );
 }

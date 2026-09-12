@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { FileText, Loader2, Sparkles } from "lucide-react";
+import { FileText, Loader2, ShieldAlert, Sparkles } from "lucide-react";
 
 import { generateWorkforceBrief, type GenerateBriefResult } from "@/lib/ai/actions";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,14 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
+const severityDot: Record<string, string> = {
+  critical: "bg-destructive",
+  high: "bg-destructive",
+  medium: "bg-warning",
+  low: "bg-success",
+  info: "bg-muted-foreground",
+};
+
 export function WorkforceBriefButton() {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -24,6 +32,7 @@ export function WorkforceBriefButton() {
     setOpen(next);
     if (next) {
       startTransition(async () => {
+        setResult(null);
         setResult(await generateWorkforceBrief());
       });
     }
@@ -37,23 +46,21 @@ export function WorkforceBriefButton() {
           Generate Workforce Brief
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" aria-hidden="true" />
             Workforce Brief
           </DialogTitle>
           <DialogDescription>
-            Summarized workforce signals gathered live from Supabase. This
-            structured document is what the Gemini service will turn into an
-            executive briefing.
+            Live Supabase signals → Gemini reasoning → structured, explainable insights.
           </DialogDescription>
         </DialogHeader>
 
         {isPending && (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Gathering workforce signals…
+            Gathering signals and running Gemini…
           </div>
         )}
 
@@ -63,20 +70,87 @@ export function WorkforceBriefButton() {
           </div>
         )}
 
-        {!isPending && result?.ok && (
+        {!isPending && result?.ok && result.insights && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">
-                {new Date(result.generatedAt!).toLocaleString()}
+                {result.brief?.generatedAt
+                  ? new Date(result.brief.generatedAt).toLocaleString()
+                  : "Generated just now"}
               </Badge>
               <Badge variant="secondary">
-                {result.insightCount} signals surfaced
+                {result.insights.length} insight{result.insights.length === 1 ? "" : "s"}
               </Badge>
+              {typeof result.saved === "number" && (
+                <Badge variant="success">
+                  {result.saved} saved to ai_insights
+                </Badge>
+              )}
+              {result.persistError && (
+                <Badge variant="outline" className="text-destructive">
+                  Insights not persisted
+                </Badge>
+              )}
             </div>
-            <div className="max-h-80 overflow-y-auto rounded-lg border bg-muted/30 p-4">
-              <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-card-foreground">
-                {result.prompt}
-              </pre>
+
+            {result.persistError && (
+              <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-xs text-warning">
+                {result.persistError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {result.insights.map((insight, index) => (
+                <div key={`${insight.title}-${index}`} className="rounded-lg border bg-card/60 p-4">
+                  <div className="flex items-start gap-2">
+                    <span
+                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${severityDot[insight.severity] ?? "bg-muted-foreground"}`}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold leading-snug">{insight.title}</p>
+                        <Badge variant="outline" className="ml-auto shrink-0">
+                          {Math.round(insight.confidence * 100)}% confidence
+                        </Badge>
+                      </div>
+                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                        {insight.summary}
+                      </p>
+                    </div>
+                  </div>
+
+                  {insight.evidence.length > 0 && (
+                    <ul className="mt-2.5 space-y-1">
+                      {insight.evidence.map((item) => (
+                        <li key={item} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                          <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {insight.reasoning && (
+                    <p className="mt-2.5 border-l-2 border-muted pl-3 text-xs leading-relaxed text-muted-foreground">
+                      <span className="font-medium text-card-foreground">Why: </span>
+                      {insight.reasoning}
+                    </p>
+                  )}
+
+                  {insight.recommended_action && (
+                    <p className="mt-2.5 text-xs font-medium text-primary">
+                      {insight.recommended_action}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Insights are AI-generated estimates from workforce data. They are not guarantees and should be
+              reviewed by HR before any action.
             </div>
           </div>
         )}
