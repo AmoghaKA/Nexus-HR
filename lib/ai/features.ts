@@ -1,7 +1,7 @@
 import { buildWorkforceBriefing, prepareBriefingPrompt } from "@/lib/ai/briefing";
 import { buildEmployeeAnalysis, prepareEmployeePrompt, type EmployeeAnalysisPackage } from "@/lib/ai/employee";
 import { fetchEmployeeDetail } from "@/lib/hr/directory";
-import { generateStructuredJSON } from "@/lib/ai/gemini";
+import { generateStructuredJSON } from "@/lib/ai/router";
 import {
   attritionReportSchema,
   candidateRankingSchema,
@@ -195,126 +195,440 @@ export async function analyzeEmployee(employeeId: string): Promise<AnalyzeEmploy
 // 3. Attrition Insights
 // ---------------------------------------------------------------------------
 
-function topFactors(factors: Record<string, unknown> | null): string[] {
-  if (!factors || typeof factors !== "object") return [];
-  return Object.entries(factors)
-    .filter(([, w]) => typeof w === "number" && w > 0.3)
-    .sort((a, b) => (b[1] as number) - (a[1] as number))
-    .slice(0, 4)
-    .map(([k]) => k.replace(/_/g, " "));
-}
-
 export interface CalculateAttritionInsightsResult {
   report: AttritionReport;
+  employeeRisks?: Array<{
+    employeeId: string;
+    name: string;
+    department: string;
+    riskScore: number; // 0-100
+    supportingSignals: string[];
+    trend: "up" | "down" | "flat";
+    aiExplanation: string;
+    recommendedAction: string;
+  }>;
+  departmentRisk?: Array<{
+    department: string;
+    avgRiskScore: number;
+    highRiskCount: number;
+    riskTrend: "up" | "down" | "flat";
+    topDrivers: string[];
+  }>;
   saved: number;
   persistError?: string;
+}
+
+function riskExplanation(signals: string[], baseScore: number): string {
+  const lines = signals.map((s) => `  ${s}`).join("\n");
+  return `The AI risk estimate (${Math.round(baseScore)}/100) is based on workforce signals:\n${lines || "  Insufficient signals to form a strong signal pattern."}\nUse this estimate as input to an HR review — not as an employment decision.`;
+}
+
+function levelFromScore(score: number): "low" | "medium" | "high" {
+  if (score >= 70) return "high";
+  if (score >= 40) return "medium";
+  return "low";
+}
+
+function actionForSignals(signals: string[]): string {
+  if (signals.some((s) => /goal|performance|workload/i.test(s))) return "Review workload";
+  if (signals.some((s) => /training|skill/i.test(s))) return "Recommend training";
+  if (signals.some((s) => /progression|career|promotion/i.test(s))) return "Discuss career development";
+  return "Schedule manager check-in";
+}
+
+/** Risk trend (up = risk increasing) derived from signal deltas and stored risk scores. */
+function riskTrend(
+  attDelta: number | null,
+  gDelta: number | null,
+  storedPrev: number | null,
+  storedLatest: number | null
+): "up" | "down" | "flat" {
+  if (storedPrev != null && storedLatest != null) {
+    if (storedLatest >= storedPrev + 5) return "up";
+    if (storedLatest <= storedPrev - 5) return "down";
+  }
+  const negativeDeltas = (attDelta != null && attDelta < 0 ? 1 : 0) + (gDelta != null && gDelta < 0 ? 1 : 0);
+  if (negativeDeltas >= 2) return "up";
+  const positiveDeltas = (attDelta != null && attDelta > 0 ? 1 : 0) + (gDelta != null && gDelta > 0 ? 1 : 0);
+  if (positiveDeltas >= 2 && negativeDeltas === 0) return "down";
+  return "flat";
 }
 
 export async function calculateAttritionInsights(): Promise<CalculateAttritionInsightsResult> {
   const supabase = requireSupabase();
 
-  const [riskRes, attRes, goalRes, fbRes, empRes] = await Promise.all([
+  const [riskRes, attRes, leaveRes, goalRes, perfRes, fbRes, trainingRes, empRes] = await Promise.all([
     supabase.from("risk_scores").select("employee_id, period, score, level, factors"),
     supabase.from("attendance").select("employee_id, date, status"),
-    supabase.from("goals").select("employee_id, status, progress"),
-    supabase.from("feedback").select("to_employee_id, category, created_at"),
-    supabase.from("employees").select("id, employment_status, profiles(full_name), departments(name), roles(title)"),
+    supabase.from("leave_requests").select("employee_id, type, days, status, created_at"),
+    supabase.from("goals").select("employee_id, title, status, progress, due_date"),
+    supabase.from("performance_reviews").select("employee_id, rating, period_end, submitted_at"),
+    supabase.from("feedback").select("to_employee_id, category, message, created_at"),
+    supabase.from("employee_training").select("employee_id, status, enrolled_at, completed_at"),
+    supabase.from("employees").select("id, employment_status, date_of_joining, experience_years, role_id, profiles(full_name), departments(name), roles(title), manager_id"),
   ]);
   checkQuery("risk_scores", riskRes);
   checkQuery("attendance", attRes);
+  checkQuery("leave_requests", leaveRes);
   checkQuery("goals", goalRes);
+  checkQuery("performance_reviews", perfRes);
   checkQuery("feedback", fbRes);
+  checkQuery("employee_training", trainingRes);
   checkQuery("employees", empRes);
 
   const risks = (riskRes.data ?? []) as { employee_id: string; period: string; score: number | null; level: string | null; factors: Record<string, unknown> | null }[];
   const attendance = (attRes.data ?? []) as { employee_id: string; date: string; status: string }[];
-  const goals = (goalRes.data ?? []) as { employee_id: string; status: string; progress: number | null }[];
-  const feedback = (fbRes.data ?? []) as { to_employee_id: string; category: string | null; created_at: string | null }[];
-  const employees = (empRes.data ?? []) as unknown as { id: string; employment_status: string; profiles: { full_name: string } | null; departments: { name: string } | null; roles: { title: string } | null }[];
+  const leaves = (leaveRes.data ?? []) as { employee_id: string; type: string; days: number | null; status: string; created_at: string | null }[];
+  const goals = (goalRes.data ?? []) as { employee_id: string; title: string; status: string; progress: number | null; due_date: string | null }[];
+  const reviews = (perfRes.data ?? []) as { employee_id: string; rating: number | null; period_end: string | null; submitted_at: string | null }[];
+  const feedback = (fbRes.data ?? []) as { to_employee_id: string; category: string | null; message: string | null; created_at: string | null }[];
+  const training = (trainingRes.data ?? []) as { employee_id: string; status: string; enrolled_at: string | null; completed_at: string | null }[];
+  const employees = (empRes.data ?? []) as unknown as { id: string; employment_status: string; date_of_joining: string | null; experience_years: number | null; role_id: string | null; profiles: { full_name: string } | null; departments: { name: string } | null; roles: { title: string } | null; manager_id: string | null }[];
 
-  // Latest risk score per employee.
-  const latest = new Map<string, { period: string; score: number; level: string | null; factors: Record<string, unknown> | null }>();
+  const activeDept = new Set(["active", "probation", "on_leave"]);
+  const empMap = new Map(employees.map((e) => [e.id, e]));
+  const activeIds = new Set(employees.filter((e) => activeDept.has(e.employment_status)).map((e) => e.id));
+
+  // -------------------------------------------------------------------------
+  // Deterministic signal aggregation per employee
+  // -------------------------------------------------------------------------
+  const thisYear = `${new Date().getFullYear()}-01-01`;
+
+  // Latest + prior risk period score per employee.
+  const scoresByEmp = new Map<string, { period: string; score: number }[]>();
   for (const r of risks) {
     if (r.score == null) continue;
-    const cur = latest.get(r.employee_id);
-    if (!cur || r.period > cur.period) latest.set(r.employee_id, { period: r.period, score: r.score, level: r.level, factors: r.factors });
+    const arr = scoresByEmp.get(r.employee_id) ?? [];
+    arr.push({ period: r.period, score: r.score });
+    scoresByEmp.set(r.employee_id, arr);
+  }
+  const latest = new Map<string, { period: string; score: number; level: string | null; factors: Record<string, unknown> | null }>();
+  const prevScore = new Map<string, number>();
+  for (const [id, arr] of scoresByEmp) {
+    const sorted = arr.slice().sort((a, b) => (a.period > b.period ? -1 : 1));
+    const mostRecent = sorted[0];
+    const prior = sorted[1];
+    const riskRow = risks.find((r) => r.employee_id === id && r.period === mostRecent.period);
+    latest.set(id, { period: mostRecent.period, score: mostRecent.score, level: riskRow?.level ?? null, factors: riskRow?.factors ?? null });
+    if (prior) prevScore.set(id, prior.score);
   }
 
-  // Per-employee attendance rate (trailing 12 weeks) and goal completion.
-  const attCutoff = new Date(Date.now() - 84 * 864e5).toISOString().slice(0, 10);
-  const attRate = new Map<string, number>();
-  const attByEmp = new Map<string, { present: number; total: number }>();
+  // Attendance rate (trailing 12 weeks) and attendance trend (compare last 6 vs prior 6).
+  const attCutoff = new Date(Date.now() - 168 * 864e5).toISOString().slice(0, 10);
+  const attWindows = new Map<string, { recent: { present: number; total: number }; prior: { present: number; total: number } }>();
   for (const a of attendance) {
     if (a.date < attCutoff) continue;
-    const bucket = attByEmp.get(a.employee_id) ?? { present: 0, total: 0 };
-    bucket.total += 1;
-    if (["present", "late", "half_day", "wfh"].includes(a.status)) bucket.present += 1;
-    attByEmp.set(a.employee_id, bucket);
+    const w = attWindows.get(a.employee_id) ?? { recent: { present: 0, total: 0 }, prior: { present: 0, total: 0 } };
+    const inRecent = a.date >= new Date(Date.now() - 84 * 864e5).toISOString().slice(0, 10);
+    const window = inRecent ? w.recent : w.prior;
+    window.total += 1;
+    if (["present", "late", "half_day", "wfh"].includes(a.status)) window.present += 1;
+    attWindows.set(a.employee_id, w);
   }
-  for (const [id, b] of attByEmp) attRate.set(id, b.total ? Math.round((b.present / b.total) * 1000) / 10 : 0);
+  const attRate = new Map<string, number>();
+  const attTrendDelta = new Map<string, number>();
+  for (const [id, w] of attWindows) {
+    const recent = w.recent.total ? (w.recent.present / w.recent.total) * 100 : null;
+    const prior = w.prior.total ? (w.prior.present / w.prior.total) * 100 : null;
+    if (recent != null) attRate.set(id, Math.round(recent * 10) / 10);
+    if (recent != null && prior != null) attTrendDelta.set(id, Math.round((recent - prior) * 10) / 10);
+  }
 
+  // Leave patterns: approved/sick leave days within the last 180 days.
+  const leaveDays = new Map<string, number>();
+  const leaveCutoff = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
+  for (const l of leaves) {
+    if (!["approved", "pending", "rejected"].includes(l.status)) continue;
+    if (l.created_at != null && l.created_at < leaveCutoff) continue;
+    leaveDays.set(l.employee_id, (leaveDays.get(l.employee_id) ?? 0) + (l.days ?? 1));
+  }
+
+  // Goal completion per employee.
   const goalPct = new Map<string, number>();
-  const goalByEmp = new Map<string, { done: number; total: number }>();
+  const goalDelta = new Map<string, number>();
+  const goalsByEmp = new Map<string, { done: number; total: number; doneOld: number; totalOld: number }>();
+  const goalEndCutoff = new Date();
+  goalEndCutoff.setMonth(goalEndCutoff.getMonth() - 3);
+  const goalEndISO = goalEndCutoff.toISOString().slice(0, 10);
   for (const g of goals) {
-    const b = goalByEmp.get(g.employee_id) ?? { done: 0, total: 0 };
-    if (["active", "completed"].includes(g.status)) {
-      b.total += 1;
-      if (g.status === "completed" || (g.progress ?? 0) >= 100) b.done += 1;
+    if (!["active", "completed"].includes(g.status)) continue;
+    const b = goalsByEmp.get(g.employee_id) ?? { done: 0, total: 0, doneOld: 0, totalOld: 0 };
+    const done = g.status === "completed" || (g.progress ?? 0) >= 100;
+    const isRecent = g.due_date == null || g.due_date >= goalEndISO;
+    b.total += 1;
+    if (done) b.done += 1;
+    if (!isRecent) {
+      b.totalOld += 1;
+      if (done) b.doneOld += 1;
     }
-    goalByEmp.set(g.employee_id, b);
+    goalsByEmp.set(g.employee_id, b);
   }
-  for (const [id, b] of goalByEmp) goalPct.set(id, b.total ? Math.round((b.done / b.total) * 100) : 0);
+  for (const [id, b] of goalsByEmp) {
+    goalPct.set(id, b.total ? Math.round((b.done / b.total) * 100) : 0);
+    const oldPct = b.totalOld ? (b.doneOld / b.totalOld) * 100 : null;
+    const curPct = b.total ? (b.done / b.total) * 100 : null;
+    if (curPct != null && oldPct != null) goalDelta.set(id, Math.round((curPct - oldPct) * 10) / 10);
+  }
 
+  // Performance trend: latest rating vs earlier rating across submitted reviews.
+  const perfLatest = new Map<string, number>();
+  const perfPrev = new Map<string, number>();
+  const perfRowsByEmp = new Map<string, { period: string; rating: number }[]>();
+  for (const r of reviews) {
+    if (r.rating == null) continue;
+    const arr = perfRowsByEmp.get(r.employee_id) ?? [];
+    arr.push({ period: r.period_end ?? r.submitted_at ?? "", rating: r.rating });
+    perfRowsByEmp.set(r.employee_id, arr);
+  }
+  for (const [id, arr] of perfRowsByEmp) {
+    const sorted = arr.slice().sort((a, b) => (a.period > b.period ? -1 : 1));
+    const latestR = sorted[0];
+    const priorR = sorted[1];
+    if (latestR) perfLatest.set(id, latestR.rating);
+    if (priorR) perfPrev.set(id, priorR.rating);
+  }
+
+  // Feedback sentiment: negative (constructive/engagement/manager) and positive (praise/peer) this year.
   const negativeFb = new Map<string, number>();
-  const yearAgo = `${new Date().getFullYear()}-01-01`;
+  const positiveFb = new Map<string, number>();
+  const disengagementPhrases = ["disengage", "burnout", "leave", "quit", "unhappy", "stressed", "overwhelmed", "not challenged", "considering"];
+  const disengagementFb = new Map<string, number>();
   for (const f of feedback) {
-    if (["constructive", "engagement", "manager"].includes(f.category ?? "") && f.created_at != null && f.created_at >= yearAgo) {
+    if (f.created_at != null && f.created_at < thisYear) continue;
+    const cat = f.category ?? "";
+    if (["constructive", "engagement", "manager"].includes(cat)) {
       negativeFb.set(f.to_employee_id, (negativeFb.get(f.to_employee_id) ?? 0) + 1);
+    } else if (["praise", "peer"].includes(cat)) {
+      positiveFb.set(f.to_employee_id, (positiveFb.get(f.to_employee_id) ?? 0) + 1);
+    }
+    const msg = (f.message ?? "").toLowerCase();
+    if (msg && disengagementPhrases.some((p) => msg.includes(p))) {
+      disengagementFb.set(f.to_employee_id, (disengagementFb.get(f.to_employee_id) ?? 0) + 1);
     }
   }
 
-  const empMap = new Map(employees.map((e) => [e.id, e]));
-  const highRisk: { name: string; role: string; department: string; score: number; level: string | null; attendance: number | null; goalPct: number | null; negativeFb: number; drivers: string[] }[] = [];
-  for (const [id, r] of latest) {
-    if (r.score < 60) continue;
-    const emp = empMap.get(id);
-    highRisk.push({
-      name: emp?.profiles?.full_name ?? "Unknown",
-      role: emp?.roles?.title ?? "Unknown role",
-      department: emp?.departments?.name ?? "Unassigned",
-      score: r.score,
-      level: r.level,
-      attendance: attRate.get(id) ?? null,
-      goalPct: goalPct.get(id) ?? null,
-      negativeFb: negativeFb.get(id) ?? 0,
-      drivers: topFactors(r.factors),
-    });
+  // Tenure years.
+  const tenure = new Map<string, number>();
+  for (const e of employees) {
+    if (e.date_of_joining) {
+      const ms = Date.now() - new Date(e.date_of_joining).getTime();
+      tenure.set(e.id, Math.max(0, Math.round((ms / (365.25 * 864e5)) * 10) / 10));
+    }
   }
-  highRisk.sort((a, b) => b.score - a.score);
+
+  // Training activity: completed courses count + active/enrolled.
+  const trainingDone = new Map<string, number>();
+  const trainingActive = new Map<string, number>();
+  for (const t of training) {
+    if (t.status === "completed") trainingDone.set(t.employee_id, (trainingDone.get(t.employee_id) ?? 0) + 1);
+    if (["in_progress", "not_started"].includes(t.status)) trainingActive.set(t.employee_id, (trainingActive.get(t.employee_id) ?? 0) + 1);
+  }
+
+  // Promotion / role progression signal: no manager-reported progression data exists in the
+  // schema, so we infer "no role progression recorded" when tenure >= 2y and the employee
+  // has no completed training that maps to a leadership program.
+  const promotionMissing = new Set<string>();
+  for (const e of employees) {
+    const yrs = tenure.get(e.id) ?? 0;
+    if (yrs >= 2 && (trainingDone.get(e.id) ?? 0) === 0) promotionMissing.add(e.id);
+  }
+
+  // -------------------------------------------------------------------------
+  // Per-employee risk aggregation (employeeRisks + departmentRisk)
+  // -------------------------------------------------------------------------
+  const employeeSignals: Array<{
+    employeeId: string;
+    name: string;
+    department: string;
+    signals: string[];
+    score: number;
+    trend: "up" | "down" | "flat";
+  }> = [];
+
+  for (const id of activeIds) {
+    const emp = empMap.get(id);
+    if (!emp) continue;
+
+    // Deterministic signal scoring (0-100 heuristic — NOT scientific).
+    let score = 0;
+
+    const signals: string[] = [];
+
+    const attDelta = attTrendDelta.get(id);
+    if (attDelta != null && attDelta < -5) {
+      score += 20;
+      signals.push(`Attendance rate declined ${Math.abs(attDelta).toFixed(1)} points recently`);
+    } else if (attDelta != null && attDelta > 5) {
+      signals.push(`Attendance rate improved ${attDelta.toFixed(1)} points recently`);
+    } else if (attDelta != null) {
+      signals.push(`Attendance stable (${attRate.get(id)?.toFixed(0) ?? "n/a"}%)`);
+    }
+
+    const leave = leaveDays.get(id) ?? 0;
+    if (leave > 10) {
+      score += 15;
+      signals.push(`Elevated leave usage (${Math.round(leave)} days in the last 6 months)`);
+    } else if (leave > 5) {
+      score += 8;
+      signals.push(`Elevated leave usage (${Math.round(leave)} days in the last 6 months)`);
+    }
+
+    const goal = goalPct.get(id);
+    if (goal != null && goal < 50) {
+      score += 20;
+      signals.push(`Goal completion low (${goal}%)`);
+    } else if (goal != null && goal < 75) {
+      score += 10;
+      signals.push(`Goal completion moderate (${goal}%)`);
+    }
+
+    const gDelta = goalDelta.get(id);
+    if (gDelta != null && gDelta < -15) {
+      score += 15;
+      signals.push(`Goal completion decreased ${Math.abs(gDelta).toFixed(0)}% over the last 3 months`);
+    }
+
+    const perf = perfLatest.get(id);
+    if (perf != null && perf <= 2) {
+      score += 20;
+      signals.push(`Performance trend declining (latest rating ${perf}/5)`);
+    } else if (perf != null && perf <= 3) {
+      score += 10;
+      signals.push(`Average performance (latest rating ${perf}/5)`);
+    }
+
+    const neg = negativeFb.get(id) ?? 0;
+    if (neg > 0) {
+      score += Math.min(20, 10 + neg * 5);
+      signals.push(`Negative feedback ${neg > 1 ? "records" : "record"} this year`);
+    }
+
+    const dis = disengagementFb.get(id) ?? 0;
+    if (dis > 0) {
+      score += 15;
+      signals.push("Recent feedback contains disengagement indicators");
+    }
+
+    const pos = positiveFb.get(id) ?? 0;
+    if (pos === 0) {
+      signals.push("No positive feedback recorded this year");
+    }
+
+    const yrs = tenure.get(id) ?? 0;
+    if (yrs < 1 && emp.date_of_joining) {
+      score += 5;
+      signals.push(`New hire — short tenure (${yrs.toFixed(1)} years)`);
+    } else if (yrs >= 1 && yrs < 2) {
+      score += 3;
+      signals.push(`Tenure ${yrs.toFixed(1)} years — stepping into role`);
+    } else if (yrs >= 4) {
+      score += 5;
+      signals.push(`Long tenure (${yrs.toFixed(1)} years) — monitor for stagnation`);
+    }
+
+    if (promotionMissing.has(id)) {
+      score += 15;
+      signals.push("No role progression recorded");
+    }
+
+    const done = trainingDone.get(id) ?? 0;
+    const act = trainingActive.get(id) ?? 0;
+    if (done === 0 && act === 0 && yrs >= 1) {
+      score += 10;
+      signals.push("No training activity in the last year");
+    } else if (done > 0) {
+      signals.push(`${done} course${done === 1 ? "" : "s"} completed · ${act} active`);
+    }
+
+    // Blend in the stored model risk score (if any) as one more signal source.
+    const stored = latest.get(id)?.score;
+    if (stored != null && stored >= 60) {
+      score += 10;
+      signals.push(`Model risk score ${stored} (${latest.get(id)?.level ?? "n/a"})`);
+    } else if (stored != null && stored >= 40) {
+      score += 5;
+    }
+
+    score = Math.min(100, Math.round(score));
+
+    const storedLatest = latest.get(id)?.score ?? null;
+    const trend = riskTrend(attDelta ?? null, gDelta ?? null, prevScore.get(id) ?? null, storedLatest);
+
+    employeeSignals.push({ employeeId: id, name: emp.profiles?.full_name ?? "Unknown", department: emp.departments?.name ?? "Unassigned", signals, score, trend });
+  }
+
+  employeeSignals.sort((a, b) => b.score - a.score);
+
+  // High-risk = score >= 60 (bounded display set).
+  const highRiskRows = employeeSignals.filter((e) => e.score >= 60).slice(0, 40);
+
+  const employeeRisks: NonNullable<CalculateAttritionInsightsResult["employeeRisks"]> = highRiskRows.map((e) => ({
+    employeeId: e.employeeId,
+    name: e.name,
+    department: e.department,
+    riskScore: e.score,
+    supportingSignals: e.signals.slice(0, 6),
+    trend: e.trend,
+    aiExplanation: riskExplanation(e.signals.slice(0, 6), e.score),
+    recommendedAction: actionForSignals(e.signals),
+  }));
+
+  // Department risk rollups.
+  const deptBuckets = new Map<string, { scores: number[]; riskCount: number; driverCounts: Map<string, number>; trends: ("up" | "down" | "flat")[] }>();
+  for (const e of employeeSignals) {
+    const dept = e.department;
+    const bucket = deptBuckets.get(dept) ?? { scores: [], riskCount: 0, driverCounts: new Map<string, number>(), trends: [] };
+    bucket.scores.push(e.score);
+    bucket.trends.push(e.trend);
+    if (e.score >= 60) bucket.riskCount += 1;
+    for (const s of e.signals) {
+      const key = s.replace(/\d+(\.\d+)?%?/g, "").trim() || s;
+      bucket.driverCounts.set(key, (bucket.driverCounts.get(key) ?? 0) + 1);
+    }
+    deptBuckets.set(dept, bucket);
+  }
+  const departmentRisk: NonNullable<CalculateAttritionInsightsResult["departmentRisk"]> = Array.from(deptBuckets.entries())
+    .map(([department, b]) => {
+      const topDrivers = Array.from(b.driverCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([d]) => d);
+      const ups = b.trends.filter((t) => t === "up").length;
+      const downs = b.trends.filter((t) => t === "down").length;
+      const riskTrend: "up" | "down" | "flat" = ups > downs && ups >= 2 ? "up" : downs > ups && downs >= 2 ? "down" : "flat";
+      return {
+        department,
+        avgRiskScore: b.scores.length ? Math.round((b.scores.reduce((a, c) => a + c, 0) / b.scores.length) * 10) / 10 : 0,
+        highRiskCount: b.riskCount,
+        riskTrend,
+        topDrivers,
+      };
+    })
+    .sort((a, b) => b.avgRiskScore - a.avgRiskScore);
 
   const riskValues = Array.from(latest.values()).map((r) => r.score);
   const avgScore = riskValues.length ? Math.round((riskValues.reduce((a, b) => a + b, 0) / riskValues.length) * 10) / 10 : 0;
 
   const driverCounts = new Map<string, number>();
-  for (const [, r] of latest) {
-    for (const d of topFactors(r.factors)) driverCounts.set(d, (driverCounts.get(d) ?? 0) + 1);
+  for (const e of employeeSignals) {
+    for (const d of e.signals) driverCounts.set(d, (driverCounts.get(d) ?? 0) + 1);
   }
   const topDrivers = Array.from(driverCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
 
   const prompt = [
     "Compute a workforce attrition risk report from the data below.",
-    `Org: ${employees.length} employees tracked, avg risk score ${avgScore}, employees with estimated score >= 60: ${highRisk.length}.`,
+    `Org: ${activeIds.size} active employees tracked, avg AI risk estimate ${avgScore}, employees with estimated risk >= 60: ${highRiskRows.length}.`,
     `Top risk drivers across the org: ${topDrivers.map(([d, n]) => `${d} (${n})`).join(", ") || "none"}.`,
     "",
-    "HIGH-RISK EMPLOYEES (estimated risk score >= 60):",
-    highRisk.length
-      ? highRisk.slice(0, 15).map((e) =>
-          `- ${e.name} | ${e.role} | ${e.department} | score ${e.score} (${e.level ?? "n/a"}) | attendance ${e.attendance ?? "n/a"}% | goal completion ${e.goalPct ?? "n/a"}% | negative feedback ${e.negativeFb} | drivers: ${e.drivers.join(", ") || "n/a"}`
+    "HIGH-RISK EMPLOYEES (AI risk estimate score >= 60):",
+    highRiskRows.length
+      ? highRiskRows.slice(0, 15).map((e) =>
+          `- ${e.name} | ${e.department} | score ${e.score} (${levelFromScore(e.score)}) | trend ${e.trend} | signals: ${e.signals.join("; ") || "n/a"}`
         ).join("\n")
       : "None.",
     "",
     "Return the attrition report JSON (headline, overall_risk_level, segments, recommended_actions, confidence).",
-    "Segment the high-risk employees into meaningful cohorts (e.g. by department or driver pattern) with headcount, average score, key drivers and a recommended action per segment.",
+    "Frame risk as 'AI risk estimate' — never a definitive prediction. Segment the high-risk employees into meaningful cohorts (e.g. by department or driver pattern) with headcount, average score, key drivers and a recommended action per segment.",
   ].join("\n");
 
   const parsed = await generateStructuredJSON<Record<string, unknown>>({
@@ -330,9 +644,9 @@ export async function calculateAttritionInsights(): Promise<CalculateAttritionIn
     toInsightRecord({
       title: `Attrition risk: ${s.name}`,
       severity: s.risk_level === "critical" ? "critical" : s.risk_level,
-      summary: `${s.name}: ${s.headcount} employee(s), avg estimated risk ${s.avg_risk_score}.`,
-      evidence: [`Avg estimated risk score ${s.avg_risk_score}`, "Drivers: " + s.key_drivers.join(", ")],
-      reasoning: "Cohort-level risk aggregation across risk scores, attendance, goals, and feedback.",
+      summary: `${s.name}: ${s.headcount} employee(s), avg AI risk estimate ${s.avg_risk_score}.`,
+      evidence: [`Avg AI risk estimate ${s.avg_risk_score}`, "Signals: " + s.key_drivers.join(", ")],
+      reasoning: "Cohort-level risk aggregation across attendance, leave, goals, performance, feedback, tenure, training, and engagement signals.",
       confidence: report.confidence,
       recommended_action: s.recommended_action,
       action_type: "check-in",
@@ -340,9 +654,27 @@ export async function calculateAttritionInsights(): Promise<CalculateAttritionIn
     }, "attrition")
   );
 
+  // Also persist the high-risk employee estimates.
+  for (const e of employeeRisks) {
+    records.push({
+      ...toInsightRecord({
+        title: `AI risk estimate: ${e.name}`,
+        severity: e.riskScore >= 80 ? "critical" : e.riskScore >= 60 ? "high" : "medium",
+        summary: `${e.name} (${e.department}): AI risk estimate ${e.riskScore}/100, trend ${e.trend}.`,
+        evidence: e.supportingSignals,
+        reasoning: e.aiExplanation,
+        confidence: 0.6,
+        recommended_action: e.recommendedAction,
+        action_type: "check-in",
+        affected_entities: [e.name],
+      }, "attrition"),
+      employeeId: e.employeeId,
+    });
+  }
+
   const { saved, persistError } = await persistInsights("attrition", records);
 
-  return { report, saved, persistError };
+  return { report, employeeRisks, departmentRisk, saved, persistError };
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +683,8 @@ export async function calculateAttritionInsights(): Promise<CalculateAttritionIn
 
 export interface AnalyzePerformanceResult {
   report: PerformanceAnalysis;
+  topPerformers?: Array<{ name: string; department: string; rating: number }>;
+  needsSupport?: Array<{ name: string; department: string; rating: number | null; goalCompletionPct: number | null; reason: string }>;
   saved: number;
   persistError?: string;
 }
@@ -358,62 +692,149 @@ export interface AnalyzePerformanceResult {
 export async function analyzePerformance(): Promise<AnalyzePerformanceResult> {
   const supabase = requireSupabase();
 
-  const [reviewRes, empRes, goalRes] = await Promise.all([
-    supabase.from("performance_reviews").select("employee_id, rating, period_end"),
-    supabase.from("employees").select("id, departments(name)"),
-    supabase.from("goals").select("employee_id, status, progress"),
+  const [reviewRes, empRes, goalRes, feedbackRes] = await Promise.all([
+    supabase.from("performance_reviews").select("employee_id, rating, period_end, period_start, review_type"),
+    supabase.from("employees").select("id, employment_status, profiles(full_name), departments(name), roles(title)"),
+    supabase.from("goals").select("employee_id, status, progress, due_date"),
+    supabase.from("feedback").select("to_employee_id, category, created_at"),
   ]);
   checkQuery("performance_reviews", reviewRes);
   checkQuery("employees", empRes);
   checkQuery("goals", goalRes);
+  checkQuery("feedback", feedbackRes);
 
-  const reviews = (reviewRes.data ?? []) as { employee_id: string; rating: number | null; period_end: string | null }[];
-  const employees = (empRes.data ?? []) as unknown as { id: string; departments: { name: string } | null }[];
-  const goals = (goalRes.data ?? []) as { employee_id: string; status: string; progress: number | null }[];
+  const reviews = (reviewRes.data ?? []) as { employee_id: string; rating: number | null; period_end: string | null; period_start: string | null; review_type: string | null }[];
+  const employees = (empRes.data ?? []) as unknown as { id: string; employment_status: string; profiles: { full_name: string } | null; departments: { name: string } | null; roles: { title: string } | null }[];
+  const goals = (goalRes.data ?? []) as { employee_id: string; status: string; progress: number | null; due_date: string | null }[];
 
-  const deptOf = new Map(employees.map((e) => [e.id, e.departments?.name ?? "Unassigned"]));
+  const activeSet = new Set(["active", "probation", "on_leave"]);
+  const activeEmployees = employees.filter((e) => activeSet.has(e.employment_status));
+  const empById = new Map(employees.map((e) => [e.id, e]));
+  const deptOf = (id: string) => empById.get(id)?.departments?.name ?? "Unassigned";
 
-  const deptRows = new Map<string, { latest: number[]; prev: number[]; periods: string[] }>();
+  // Latest rating per employee (last review in the latest period) + prior rating.
+  const latestRating = new Map<string, number>();
+  const priorRating = new Map<string, number>();
+  const periodByEmp = new Map<string, string>();
   for (const r of reviews) {
-    if (r.rating == null || !r.period_end) continue;
-    const dept = deptOf.get(r.employee_id) ?? "Unassigned";
-    const row = deptRows.get(dept) ?? { latest: [], prev: [], periods: [] };
-    const periods = Array.from(new Set((deptRows.get(dept)?.periods ?? []).concat(r.period_end))).sort();
-    row.periods = periods;
-    const latestPeriod = periods[periods.length - 1];
-    if (r.period_end === latestPeriod) row.latest.push(r.rating);
-    row.prev.push(r.rating);
-    deptRows.set(dept, row);
+    if (r.rating == null) continue;
+    const key = r.period_end ?? r.period_start ?? "";
+    const existingKey = periodByEmp.get(r.employee_id);
+    if (!existingKey || (key && key >= existingKey)) {
+      if (existingKey && key && key > existingKey) priorRating.set(r.employee_id, latestRating.get(r.employee_id) ?? r.rating);
+      periodByEmp.set(r.employee_id, key);
+      latestRating.set(r.employee_id, r.rating);
+    } else if (key < existingKey) {
+      priorRating.set(r.employee_id, r.rating);
+    }
   }
 
+  // Goal completion per employee.
   const goalPct = new Map<string, number>();
   const goalByEmp = new Map<string, { done: number; total: number }>();
   for (const g of goals) {
+    if (!["active", "completed"].includes(g.status)) continue;
     const b = goalByEmp.get(g.employee_id) ?? { done: 0, total: 0 };
-    if (["active", "completed"].includes(g.status)) {
-      b.total += 1;
-      if (g.status === "completed" || (g.progress ?? 0) >= 100) b.done += 1;
-    }
+    b.total += 1;
+    if (g.status === "completed" || (g.progress ?? 0) >= 100) b.done += 1;
     goalByEmp.set(g.employee_id, b);
   }
   for (const [id, b] of goalByEmp) goalPct.set(id, b.total ? Math.round((b.done / b.total) * 100) : 0);
+
+  // Negative feedback this year (engagement/constructive) — input for "needs support".
+  const thisYear = `${new Date().getFullYear()}-01-01`;
+  const negFb = new Map<string, number>();
+  for (const f of feedbackRes.data ?? []) {
+    if (f.to_employee_id && f.category && ["constructive", "engagement", "manager"].includes(f.category) && f.created_at != null && f.created_at >= thisYear) {
+      negFb.set(f.to_employee_id, (negFb.get(f.to_employee_id) ?? 0) + 1);
+    }
+  }
+
+  // Department-level comparison (latest + prior period averages).
+  const deptRows = new Map<string, { latest: number[]; prior: number[]; periods: string[] }>();
+  for (const r of reviews) {
+    if (r.rating == null) continue;
+    const dept = deptOf(r.employee_id);
+    const row = deptRows.get(dept) ?? { latest: [], prior: [], periods: [] };
+    const key = r.period_end ?? r.period_start ?? "";
+    const periods = Array.from(new Set(row.periods.concat(key).filter(Boolean))).sort();
+    row.periods = periods;
+    const latestPeriod = periods[periods.length - 1] ?? "";
+    if (key === latestPeriod && key) row.latest.push(r.rating);
+    row.prior.push(r.rating);
+    deptRows.set(dept, row);
+  }
 
   const deptLines = Array.from(deptRows.entries())
     .map(([dept, row]) => {
       const avg = (values: number[]) => (values.length ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100 : null);
       const latestAvg = avg(row.latest);
-      const prevAvg = avg(row.prev);
-      const delta = latestAvg != null && prevAvg != null ? Math.round((latestAvg - prevAvg) * 100) / 100 : null;
-      return `- ${dept}: latest avg ${latestAvg ?? "n/a"} (prior avg ${prevAvg ?? "n/a"}, delta ${delta ?? "n/a"}) rated cycles: ${row.periods.join(", ")}`;
+      const priorAvg = avg(row.prior);
+      const delta = latestAvg != null && priorAvg != null ? Math.round((latestAvg - priorAvg) * 100) / 100 : null;
+      const deptGoalPcts = activeEmployees.filter((e) => deptOf(e.id) === dept).map((e) => goalPct.get(e.id) ?? 0);
+      const deptGoalAvg = deptGoalPcts.length ? Math.round((deptGoalPcts.reduce((a, b) => a + b, 0) / deptGoalPcts.length) * 10) / 10 : null;
+      return `- ${dept}: latest avg ${latestAvg ?? "n/a"} (prior avg ${priorAvg ?? "n/a"}, delta ${delta ?? "n/a"}), goal completion ${deptGoalAvg ?? "n/a"}%`;
     })
     .join("\n");
 
+  // Top performers: highest latest ratings (>= 4).
+  const rated = activeEmployees
+    .map((e) => ({ id: e.id, name: e.profiles?.full_name ?? "Unknown", department: deptOf(e.id), rating: latestRating.get(e.id) }))
+    .filter((e) => e.rating != null);
+  const topPerformers = rated
+    .filter((e) => e.rating! >= 4)
+    .sort((a, b) => b.rating! - a.rating!)
+    .slice(0, 10)
+    .map((e) => ({ name: e.name, department: e.department, rating: e.rating! }));
+
+  // Employees needing support: lowest ratings or low goal completion with negative feedback.
+  const needsSupport = rated
+    .map((e) => ({
+      name: e.name,
+      department: e.department,
+      rating: e.rating,
+      goalCompletionPct: goalPct.get(e.id) ?? null,
+      negFb: negFb.get(e.id) ?? 0,
+    }))
+    .filter((e) => (e.rating != null && e.rating <= 2) || (e.rating != null && e.rating <= 3 && (e.goalCompletionPct ?? 100) < 60) || (e.rating != null && e.rating <= 3 && e.negFb > 0))
+    .sort((a, b) => (a.rating ?? 5) - (b.rating ?? 5))
+    .slice(0, 12)
+    .map((e) => {
+      const reasons: string[] = [];
+      if (e.rating != null && e.rating <= 2) reasons.push(`latest rating ${e.rating}/5`);
+      else if (e.rating != null && (e.goalCompletionPct ?? 100) < 60) reasons.push(`goal completion ${e.goalCompletionPct ?? 0}%`);
+      if (e.negFb > 0) reasons.push(`${e.negFb} negative feedback record${e.negFb === 1 ? "" : "s"} this year`);
+      return {
+        name: e.name,
+        department: e.department,
+        rating: e.rating ?? null,
+        goalCompletionPct: e.goalCompletionPct,
+        reason: reasons.join("; ") || "flagged for review",
+      };
+    });
+
+  // Org-level average for the headline context.
+  const allRatings = Array.from(latestRating.values());
+  const overallAvg = allRatings.length ? Math.round((allRatings.reduce((a, b) => a + b, 0) / allRatings.length) * 100) / 100 : 0;
+
   const prompt = [
-    "Analyze organizational performance from the review and goal data below.",
+    "Analyze organizational performance from the review, goal, and feedback data below.",
     deptLines || "- No review data available.",
+    `Org average rating: ${overallAvg}/5 (${allRatings.length} reviews).`,
     "",
-    "Return the performance analysis JSON (headline, overall_rating, by_department with rating/trend/note, strengths, concerns, recommended_actions, confidence).",
+    `TOP PERFORMERS (latest rating >= 4):`,
+    topPerformers.length
+      ? topPerformers.map((t) => `- ${t.name} | ${t.department} | ${t.rating}/5`).join("\n")
+      : "- None identified.",
+    "",
+    `EMPLOYEES NEEDING SUPPORT (flagged for HR review):`,
+    needsSupport.length
+      ? needsSupport.slice(0, 12).map((n) => `- ${n.name} | ${n.department} | rating ${n.rating ?? "n/a"}/5 | goal completion ${n.goalCompletionPct ?? "n/a"}% | why: ${n.reason}`).join("\n")
+      : "- None flagged.",
+    "",
+    "Return the performance analysis JSON (headline, overall_rating, by_department with rating/trend/note, strengths, improvement_areas, goal_risks, development_recommendations, recommended_actions, confidence).",
     "Rate on the same 1-5 scale. Use 'trend' to compare each department against its prior rated cycle.",
+    "Keep 'development_recommendations' and 'recommended_actions' as recommendations for HR to review — never decisions. Frame all support needs as suggestions for HR action.",
   ].join("\n");
 
   const parsed = await generateStructuredJSON<Record<string, unknown>>({
@@ -441,9 +862,26 @@ export async function analyzePerformance(): Promise<AnalyzePerformanceResult> {
       }, "performance")
     );
 
+  // Persist flagged support needs as insights too (org-wide, no auto decisions).
+  for (const n of needsSupport.slice(0, 6)) {
+    records.push(
+      toInsightRecord({
+        title: `Support needed: ${n.name}`,
+        severity: (n.rating ?? 3) <= 2 ? "high" : "medium",
+        summary: `${n.name} (${n.department}) flagged for HR support: ${n.reason}.`,
+        evidence: [`Rating ${n.rating ?? "n/a"}/5`, n.goalCompletionPct != null ? `Goal completion ${n.goalCompletionPct}%` : "No goals", n.reason],
+        reasoning: "Flagged from deterministic performance, goal, and feedback signals for HR to review — no automatic employment decision is made.",
+        confidence: 0.6,
+        recommended_action: "Schedule a manager check-in and review workload before deciding next steps.",
+        action_type: "check-in",
+        affected_entities: [n.name],
+      }, "performance")
+    );
+  }
+
   const { saved, persistError } = await persistInsights("performance", records);
 
-  return { report, saved, persistError };
+  return { report, topPerformers, needsSupport, saved, persistError };
 }
 
 // ---------------------------------------------------------------------------

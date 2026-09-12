@@ -117,6 +117,8 @@ export async function analyzeEmployee(employeeId: string): Promise<AnalyzeEmploy
 export interface CalculateAttritionActionResult {
   ok: boolean;
   report?: CalculateAttritionInsightsResult["report"];
+  employeeRisks?: CalculateAttritionInsightsResult["employeeRisks"];
+  departmentRisk?: CalculateAttritionInsightsResult["departmentRisk"];
   saved?: number;
   persistError?: string;
   error?: string;
@@ -125,7 +127,14 @@ export interface CalculateAttritionActionResult {
 export async function calculateAttritionInsights(): Promise<CalculateAttritionActionResult> {
   try {
     const result = await runAttrition();
-    return { ok: true, report: result.report, saved: result.saved, persistError: result.persistError };
+    return {
+      ok: true,
+      report: result.report,
+      employeeRisks: result.employeeRisks,
+      departmentRisk: result.departmentRisk,
+      saved: result.saved,
+      persistError: result.persistError,
+    };
   } catch (error) {
     return { ok: false, error: messageOf(error, "Something went wrong running the attrition analysis.") };
   }
@@ -138,6 +147,8 @@ export async function calculateAttritionInsights(): Promise<CalculateAttritionAc
 export interface AnalyzePerformanceActionResult {
   ok: boolean;
   report?: AnalyzePerformanceResult["report"];
+  topPerformers?: AnalyzePerformanceResult["topPerformers"];
+  needsSupport?: AnalyzePerformanceResult["needsSupport"];
   saved?: number;
   persistError?: string;
   error?: string;
@@ -146,7 +157,14 @@ export interface AnalyzePerformanceActionResult {
 export async function analyzePerformance(): Promise<AnalyzePerformanceActionResult> {
   try {
     const result = await runPerformance();
-    return { ok: true, report: result.report, saved: result.saved, persistError: result.persistError };
+    return {
+      ok: true,
+      report: result.report,
+      topPerformers: result.topPerformers,
+      needsSupport: result.needsSupport,
+      saved: result.saved,
+      persistError: result.persistError,
+    };
   } catch (error) {
     return { ok: false, error: messageOf(error, "Something went wrong analyzing performance.") };
   }

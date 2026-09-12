@@ -61,7 +61,9 @@ export interface PerformanceAnalysis {
     note: string;
   }[];
   strengths: string[];
-  concerns: string[];
+  improvement_areas: string[];
+  goal_risks: string[];
+  development_recommendations: string[];
   recommended_actions: string[];
   confidence: number;
 }
@@ -268,11 +270,13 @@ export const performanceAnalysisSchema: Schema = obj(
       note: str("Short qualitative note"),
     }, ["department", "rating", "trend", "note"])),
     strengths: arr("Org strengths", str("Strength")),
-    concerns: arr("Org concerns", str("Concern")),
+    improvement_areas: arr("Areas where the org should improve", str("Improvement area")),
+    goal_risks: arr("Risks to goal attainment", str("Goal risk")),
+    development_recommendations: arr("Development recommendations for HR to consider", str("Recommendation")),
     recommended_actions: arr("Recommended actions", str("Recommended action")),
     confidence: num("Model confidence between 0 and 1"),
   },
-  ["headline", "overall_rating", "by_department", "strengths", "concerns", "recommended_actions", "confidence"]
+  ["headline", "overall_rating", "by_department", "strengths", "improvement_areas", "goal_risks", "development_recommendations", "recommended_actions", "confidence"]
 );
 
 export const skillRecommendationSchema: Schema = obj(
@@ -537,7 +541,9 @@ export function normalizePerformanceAnalysis(raw: Record<string, unknown>): Perf
       };
     }),
     strengths: asStringArray(raw.strengths),
-    concerns: asStringArray(raw.concerns),
+    improvement_areas: asStringArray(raw.improvement_areas),
+    goal_risks: asStringArray(raw.goal_risks),
+    development_recommendations: asStringArray(raw.development_recommendations),
     recommended_actions: asStringArray(raw.recommended_actions),
     confidence: asConfidence(raw.confidence),
   };

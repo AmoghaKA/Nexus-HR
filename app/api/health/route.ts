@@ -1,3 +1,5 @@
+import { getConfiguredProviders } from "@/lib/ai/router";
+
 export async function GET() {
   return Response.json({
     status: "ok",
@@ -7,7 +9,9 @@ export async function GET() {
         process.env.NEXT_PUBLIC_SUPABASE_URL &&
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       ),
-      gemini: Boolean(process.env.GEMINI_API_KEY),
+    },
+    ai: {
+      providers: getConfiguredProviders(),
     },
   });
 }
