@@ -60,6 +60,11 @@ import { getSupabaseAuth } from "@/lib/supabase/auth-client";
 import { workspaceRoleFromUser } from "@/lib/auth/role";
 import { generateCopilotAnswer as runCopilotAnswer, type CopilotIntent } from "@/lib/ai/copilot";
 import type { CopilotAnswer } from "@/lib/ai/schemas";
+import {
+  createRetentionPlan as runRetentionPlan,
+  generateManagerActions as runManagerActions,
+} from "@/lib/ai/command";
+import type { ManagerActionPlan, RetentionPlan } from "@/lib/ai/schemas";
 
 export interface PickerOption {
   value: string;
@@ -835,5 +840,44 @@ export async function answerCopilotQuestion(
     return { ok: true, intent: result.intent, answer: result.answer };
   } catch (error) {
     return { ok: false, error: messageOf(error, "Something went wrong answering your question.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 21. Command-center AI actions (/hr/dashboard — Create Retention Plan,
+//     Generate Manager Actions). Results are persisted to ai_insights.
+// ---------------------------------------------------------------------------
+
+export interface CreateRetentionPlanActionResult {
+  ok: boolean;
+  plan?: RetentionPlan;
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+export async function createRetentionPlan(): Promise<CreateRetentionPlanActionResult> {
+  try {
+    const result = await runRetentionPlan();
+    return { ok: true, plan: result.plan, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong creating the retention plan.") };
+  }
+}
+
+export interface GenerateManagerActionsActionResult {
+  ok: boolean;
+  plan?: ManagerActionPlan;
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+export async function generateManagerActions(): Promise<GenerateManagerActionsActionResult> {
+  try {
+    const result = await runManagerActions();
+    return { ok: true, plan: result.plan, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong generating manager actions.") };
   }
 }

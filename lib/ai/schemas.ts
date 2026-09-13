@@ -234,6 +234,43 @@ export interface CopilotAnswer {
   confidence: number;
 }
 
+export interface RetentionFocusArea {
+  title: string;
+  description: string;
+  actions: string[];
+}
+
+export interface RetentionEmployeeAction {
+  name: string;
+  note: string;
+  action: string;
+}
+
+/** AI-generated retention plan persisted to ai_insights (advisory). */
+export interface RetentionPlan {
+  headline: string;
+  summary: string;
+  focus_areas: RetentionFocusArea[];
+  at_risk_employees: RetentionEmployeeAction[];
+  recommended_actions: string[];
+  confidence: number;
+}
+
+export interface ManagerDepartmentActions {
+  department: string;
+  summary: string;
+  actions: string[];
+}
+
+/** AI-generated manager action plan persisted to ai_insights (advisory). */
+export interface ManagerActionPlan {
+  headline: string;
+  summary: string;
+  by_department: ManagerDepartmentActions[];
+  recommended_actions: string[];
+  confidence: number;
+}
+
 export interface CareerPath {
   path: string;
   rationale: string;
@@ -775,6 +812,43 @@ export const copilotAnswerSchema: Schema = obj(
   ["answer", "evidence", "reasoning", "recommended_actions", "relevant_departments", "relevant_employees", "relevant_candidates", "confidence"]
 );
 
+export const retentionPlanSchema: Schema = obj(
+  "Retention action plan for the highest-risk employees, grounded in the provided workforce signals.",
+  {
+    headline: str("One-line summary of the retention plan"),
+    summary: str("2-3 sentence plan overview and target population"),
+    focus_areas: arr("Retention focus areas", obj("Focus area", {
+      title: str("Focus area, e.g. 'Manager check-ins'"),
+      description: str("Why this area matters for retention"),
+      actions: arr("Concrete actions for this focus area", str("Action")),
+    }, ["title", "description", "actions"])),
+    at_risk_employees: arr("Individual attention plans for the highest-risk employees", obj("Employee plan", {
+      name: str("Employee full name exactly as shown in the provided context"),
+      note: str("Why they are at risk, e.g. 'risk 79, declining attendance'"),
+      action: str("The specific retention action for this employee"),
+    }, ["name", "note", "action"])),
+    recommended_actions: arr("Plan-wide recommended actions", str("Recommended action")),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["headline", "summary", "focus_areas", "at_risk_employees", "recommended_actions", "confidence"]
+);
+
+export const managerActionsSchema: Schema = obj(
+  "Manager action plan generated from cross-source workforce signals, grounded in the provided context.",
+  {
+    headline: str("One-line summary of the manager actions plan"),
+    summary: str("2-3 sentence overview of the plan"),
+    by_department: arr("Actions grouped by department", obj("Department actions", {
+      department: str("Department name exactly as shown in the provided context"),
+      summary: str("1-2 sentence summary of that department's signals"),
+      actions: arr("Concrete manager actions for this department", str("Action")),
+    }, ["department", "summary", "actions"])),
+    recommended_actions: arr("Organization-wide recommended actions", str("Recommended action")),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["headline", "summary", "by_department", "recommended_actions", "confidence"]
+);
+
 export const careerRecommendationsSchema: Schema = obj(
   "Career growth recommendations grounded in the employee's skills, role and goals.",
   {
@@ -1252,6 +1326,47 @@ export function normalizeCopilotAnswer(raw: Record<string, unknown>): CopilotAns
     relevant_departments: normalizeCopilotEntityRefs(raw.relevant_departments),
     relevant_employees: normalizeCopilotEntityRefs(raw.relevant_employees),
     relevant_candidates: normalizeCopilotEntityRefs(raw.relevant_candidates),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizeRetentionPlan(raw: Record<string, unknown>): RetentionPlan {
+  const focus_areas = Array.isArray(raw.focus_areas) ? raw.focus_areas : [];
+  const at_risk = Array.isArray(raw.at_risk_employees) ? raw.at_risk_employees : [];
+  return {
+    headline: asString(raw.headline),
+    summary: asString(raw.summary),
+    focus_areas: focus_areas.map((f) => {
+      const row = (f ?? {}) as Record<string, unknown>;
+      return {
+        title: asString(row.title),
+        description: asString(row.description),
+        actions: asStringArray(row.actions),
+      };
+    }),
+    at_risk_employees: at_risk.map((e) => {
+      const row = (e ?? {}) as Record<string, unknown>;
+      return { name: asString(row.name), note: asString(row.note), action: asString(row.action) };
+    }),
+    recommended_actions: asStringArray(raw.recommended_actions),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizeManagerActions(raw: Record<string, unknown>): ManagerActionPlan {
+  const by_dept = Array.isArray(raw.by_department) ? raw.by_department : [];
+  return {
+    headline: asString(raw.headline),
+    summary: asString(raw.summary),
+    by_department: by_dept.map((d) => {
+      const row = (d ?? {}) as Record<string, unknown>;
+      return {
+        department: asString(row.department),
+        summary: asString(row.summary),
+        actions: asStringArray(row.actions),
+      };
+    }),
+    recommended_actions: asStringArray(raw.recommended_actions),
     confidence: asConfidence(raw.confidence),
   };
 }

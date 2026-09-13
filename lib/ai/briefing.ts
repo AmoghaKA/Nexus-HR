@@ -84,6 +84,142 @@ export interface WorkforceBriefing {
   insights: AiInsight[];
 }
 
+export interface HealthCategoryScore {
+  key: string;
+  label: string;
+  score: number; // 0..100
+  detail: string;
+}
+
+export interface WorkforceHealthScore {
+  score: number; // 0..100
+  label: "excellent" | "good" | "fair" | "at_risk";
+  categories: HealthCategoryScore[];
+}
+
+function clampScore(n: number): number {
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+function meanOf(values: (number | null | undefined)[]): number | null {
+  const nums = values.filter((v): v is number => typeof v === "number");
+  if (nums.length === 0) return null;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+/**
+ * Single headline health score (0–100) synthesized from every domain the
+ * workforce package tracks. Weights: risk 25, attendance 15, performance 15,
+ * goals 10, skills 10, onboarding 10, recruitment 5. Missing domains are
+ * skipped and weights are renormalized so the score never penalizes a domain
+ * that has no data.
+ */
+export function computeWorkforceHealthScore(pkg: WorkforceDataPackage): WorkforceHealthScore {
+  const byDept = (pick: (d: DepartmentStats) => number | null) => {
+    const values = pkg.departments.map(pick);
+    const nums = values.filter((v): v is number => typeof v === "number");
+    return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+  };
+
+  const riskScore =
+    pkg.risk.highOrCriticalPct == null
+      ? null
+      : clampScore(100 - pkg.risk.highOrCriticalPct * 5 - pkg.risk.topDrivers.length * 2);
+  const attendance = byDept((d) => d.attendanceRatePct);
+  const attendanceVar = byDept((d) => d.attendanceVariabilityPct);
+  const attendanceScore =
+    attendance == null ? null : clampScore(attendance - (attendanceVar ?? 0) * 2);
+  const performance = byDept((d) => d.avgPerformance);
+  const performanceScore = performance == null ? null : clampScore((performance / 5) * 100);
+  const goals = meanOf(pkg.goalsByEmployee.map((g) => g.completionPct));
+  const goalsScore = goals == null ? null : clampScore(goals);
+  const skillsScore = pkg.skills.overallCoveragePct == null ? null : clampScore(pkg.skills.overallCoveragePct);
+  const onboardingScore =
+    pkg.onboarding.overdueTaskPct == null ? null : clampScore(100 - pkg.onboarding.overdueTaskPct);
+  const recruitmentScore =
+    pkg.recruitment.openRoles <= 0
+      ? 85
+      : clampScore(Math.min(100, (pkg.recruitment.activeCandidates / (pkg.recruitment.openRoles * 4)) * 100));
+
+  const entries: { key: string; label: string; score: number; weight: number; detail: string; missing: boolean }[] = [
+    {
+      key: "risk",
+      label: "Attrition risk",
+      score: riskScore ?? 0,
+      weight: 25,
+      missing: riskScore == null,
+      detail:
+        pkg.risk.highOrCriticalPct == null
+          ? "No risk scores on record"
+          : `${pkg.risk.highRiskCount} high-risk employees (${pkg.risk.highOrCriticalPct}%)`,
+    },
+    {
+      key: "attendance",
+      label: "Attendance",
+      score: attendanceScore ?? 0,
+      weight: 15,
+      missing: attendance == null,
+      detail: attendance == null ? "No attendance data" : `Avg ${Math.round(attendance)}% attendance`,
+    },
+    {
+      key: "performance",
+      label: "Performance",
+      score: performanceScore ?? 0,
+      weight: 15,
+      missing: performance == null,
+      detail: performance == null ? "No reviews yet" : `Avg rating ${Math.round(performance * 10) / 10} / 5`,
+    },
+    {
+      key: "goals",
+      label: "Goal completion",
+      score: goalsScore ?? 0,
+      weight: 10,
+      missing: goals == null,
+      detail: goals == null ? "No active goals" : `Avg ${Math.round(goals)}% goal completion`,
+    },
+    {
+      key: "skills",
+      label: "Skill coverage",
+      score: skillsScore ?? 0,
+      weight: 10,
+      missing: skillsScore == null,
+      detail: pkg.skills.overallCoveragePct == null ? "No skill data" : `${pkg.skills.overallCoveragePct}% critical skills covered`,
+    },
+    {
+      key: "onboarding",
+      label: "Onboarding health",
+      score: onboardingScore ?? 0,
+      weight: 10,
+      missing: onboardingScore == null,
+      detail:
+        pkg.onboarding.overdueTaskPct == null
+          ? "No active onboarding plans"
+          : `${pkg.onboarding.delayedTasks} overdue tasks (${pkg.onboarding.overdueTaskPct}%)`,
+    },
+    {
+      key: "recruitment",
+      label: "Recruitment pipeline",
+      score: recruitmentScore,
+      weight: 5,
+      missing: false,
+      detail: `${pkg.recruitment.activeCandidates} active candidates for ${pkg.recruitment.openRoles} open roles`,
+    },
+  ];
+
+  const usable = entries.filter((e) => !e.missing);
+  const weightSum = usable.reduce((a, b) => a + b.weight, 0);
+  const score = weightSum === 0 ? 50 : clampScore(usable.reduce((a, b) => a + b.score * b.weight, 0) / weightSum);
+
+  const label: WorkforceHealthScore["label"] =
+    score >= 85 ? "excellent" : score >= 70 ? "good" : score >= 55 ? "fair" : "at_risk";
+
+  return {
+    score,
+    label,
+    categories: entries.map((e) => ({ key: e.key, label: e.label, score: e.score, detail: e.detail })),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Data collection
 // ---------------------------------------------------------------------------

@@ -208,7 +208,7 @@ async function fetchRoster(): Promise<CopilotRoster> {
 // 3. Per-employee risk snapshot (attrition / performance / attendance intents)
 // ---------------------------------------------------------------------------
 
-async function fetchRiskSnapshot(): Promise<CopilotRiskSnapshot | null> {
+export async function fetchRiskSnapshot(): Promise<CopilotRiskSnapshot | null> {
   const supabase = getSupabaseServer();
   if (!supabase) return null;
 
