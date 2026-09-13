@@ -24,7 +24,7 @@ const readinessVariant = {
   not_ready: "secondary",
 } as const;
 
-export function CareerPlan() {
+export function CareerPlan({ skills }: { skills?: string[] }) {
   const { isPending, result, run } = useAiRun<GenerateCareerRecommendationsActionResult>();
   return (
     <div className="space-y-4">
@@ -44,6 +44,8 @@ export function CareerPlan() {
       {result?.ok && result.recommendations && (
         <ReportView
           recommendations={result.recommendations}
+          currentSkills={skills ?? []}
+          showGaps={Boolean(skills)}
           saved={result.saved}
           persistError={result.persistError}
         />
@@ -54,13 +56,19 @@ export function CareerPlan() {
 
 function ReportView({
   recommendations,
+  currentSkills,
+  showGaps,
   saved,
   persistError,
 }: {
   recommendations: NonNullable<GenerateCareerRecommendationsActionResult["recommendations"]>;
+  currentSkills: string[];
+  showGaps: boolean;
   saved?: number;
   persistError?: string;
 }) {
+  const hasSkill = (skill: string) =>
+    currentSkills.some((s) => s.toLowerCase() === skill.toLowerCase());
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -90,13 +98,31 @@ function ReportView({
                 <BulletList items={path.steps} tone="muted" />
               </div>
               <div>
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Skills to build</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {path.required_skills.map((skill) => (
-                    <span key={skill} className="rounded bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      {skill}
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Skills to build
+                  {showGaps && (
+                    <span className="ml-1 text-[10px] font-medium normal-case text-muted-foreground/70">
+                      (gaps from your profile)
                     </span>
-                  ))}
+                  )}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {path.required_skills.map((skill) => {
+                    const missing = showGaps && !hasSkill(skill);
+                    return (
+                      <span
+                        key={skill}
+                        className={
+                          missing
+                            ? "inline-flex items-center gap-1 rounded bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning"
+                            : "rounded bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                        }
+                      >
+                        {missing && <span aria-hidden="true">!</span>}
+                        {skill}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>

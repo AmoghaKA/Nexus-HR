@@ -15,6 +15,14 @@ import {
   evaluateInterview as runInterviewEvaluation,
   answerPolicyQuestion as runPolicyAnswer,
   generateCareerRecommendations as runCareerRecommendations,
+  analyzeResume as runResumeAnalysis,
+  matchCandidate as runCandidateMatch,
+  compareCandidates as runCandidateComparison,
+  generateEmployeeBrief as runEmployeeBrief,
+  sharpenGoal as runSharpenGoal,
+  recommendSkillPlan as runSkillPlan,
+  explainPerformance as runPerformanceCoach,
+  recommendLearning as runLearningPlan,
   type GenerateWorkforceBriefResult,
   type AnalyzeEmployeeResult as FeatureAnalyzeEmployeeResult,
   type CalculateAttritionInsightsResult,
@@ -26,6 +34,15 @@ import {
   type EvaluateInterviewResult,
   type AnswerPolicyQuestionResult,
   type GenerateCareerRecommendationsResult,
+  type AnalyzeResumeResult,
+  type MatchCandidateResult,
+  type CompareCandidatesResult,
+  type GenerateEmployeeBriefResult,
+  type SharpenGoalInput,
+  type SharpenGoalResult,
+  type SkillPlanResult,
+  type PerformanceCoachResult,
+  type LearningPlanResult,
 } from "@/lib/ai/features";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -435,5 +452,214 @@ export async function generateCareerRecommendations(): Promise<GenerateCareerRec
     };
   } catch (error) {
     return { ok: false, error: messageOf(error, "Something went wrong generating career recommendations.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 12. Resume analysis (/hr/recruitment)
+// ---------------------------------------------------------------------------
+
+export interface AnalyzeResumeActionResult {
+  ok: boolean;
+  analysis?: AnalyzeResumeResult["analysis"];
+  error?: string;
+}
+
+export async function analyzeResume(candidateId: string): Promise<AnalyzeResumeActionResult> {
+  try {
+    const result = await runResumeAnalysis(candidateId);
+    return { ok: true, analysis: result.analysis };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong analyzing the resume.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 13. Candidate matching (/hr/recruitment)
+// ---------------------------------------------------------------------------
+
+export interface MatchCandidateActionResult {
+  ok: boolean;
+  match?: MatchCandidateResult["match"];
+  error?: string;
+}
+
+export async function matchCandidate(candidateId: string): Promise<MatchCandidateActionResult> {
+  try {
+    const result = await runCandidateMatch(candidateId);
+    return { ok: true, match: result.match };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong matching the candidate.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 14. Candidate comparison (/hr/recruitment)
+// ---------------------------------------------------------------------------
+
+export interface CompareCandidatesActionResult {
+  ok: boolean;
+  comparison?: CompareCandidatesResult["comparison"];
+  rows?: CompareCandidatesResult["rows"];
+  error?: string;
+}
+
+export async function compareCandidates(candidateIds: string[]): Promise<CompareCandidatesActionResult> {
+  try {
+    const result = await runCandidateComparison(candidateIds);
+    return { ok: true, comparison: result.comparison, rows: result.rows };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong comparing the candidates.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 15. Personal AI workforce brief (/employee/dashboard)
+// ---------------------------------------------------------------------------
+
+async function resolveEmployeeId(): Promise<{ employeeId: string } | { error: string }> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return { error: "Supabase is not configured." };
+
+  const cookieStore = await cookies();
+  const auth = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll() {
+        // Token refresh is handled by the proxy; server actions cannot set cookies.
+      },
+    },
+  });
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) return { error: "You are not signed in." };
+
+  const service = getSupabaseServer();
+  if (!service) return { error: "Supabase is not configured." };
+  const { data: emp } = await service
+    .from("employees")
+    .select("id")
+    .eq("profile_id", user.id)
+    .maybeSingle();
+  if (!emp) return { error: "No employee profile is linked to your account yet." };
+
+  return { employeeId: (emp as { id: string }).id };
+}
+
+export interface GenerateEmployeeBriefActionResult {
+  ok: boolean;
+  brief?: GenerateEmployeeBriefResult["brief"];
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+export async function generateEmployeeBrief(): Promise<GenerateEmployeeBriefActionResult> {
+  try {
+    const identity = await resolveEmployeeId();
+    if ("error" in identity) return { ok: false, error: identity.error };
+
+    const result = await runEmployeeBrief();
+    return { ok: true, brief: result.brief, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong generating your AI brief.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 16. Goal sharpening (/employee/goals)
+// ---------------------------------------------------------------------------
+
+export interface SharpenGoalActionResult {
+  ok: boolean;
+  goal?: SharpenGoalResult["goal"];
+  error?: string;
+}
+
+export async function sharpenGoal(input: SharpenGoalInput): Promise<SharpenGoalActionResult> {
+  try {
+    const identity = await resolveEmployeeId();
+    if ("error" in identity) return { ok: false, error: identity.error };
+
+    const result = await runSharpenGoal(input);
+    return { ok: true, goal: result.goal };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong sharpening this goal.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 17. Personal skill plan (/employee/skills)
+// ---------------------------------------------------------------------------
+
+export interface SkillPlanActionResult {
+  ok: boolean;
+  plan?: SkillPlanResult["plan"];
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+export async function recommendSkillPlan(): Promise<SkillPlanActionResult> {
+  try {
+    const identity = await resolveEmployeeId();
+    if ("error" in identity) return { ok: false, error: identity.error };
+
+    const result = await runSkillPlan();
+    return { ok: true, plan: result.plan, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong generating your skill plan.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 18. Performance coach (/employee/performance)
+// ---------------------------------------------------------------------------
+
+export interface PerformanceCoachActionResult {
+  ok: boolean;
+  coach?: PerformanceCoachResult["coach"];
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+export async function explainPerformance(): Promise<PerformanceCoachActionResult> {
+  try {
+    const identity = await resolveEmployeeId();
+    if ("error" in identity) return { ok: false, error: identity.error };
+
+    const result = await runPerformanceCoach();
+    return { ok: true, coach: result.coach, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong analyzing your performance.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 19. Learning recommendations (/employee/learning)
+// ---------------------------------------------------------------------------
+
+export interface LearningPlanActionResult {
+  ok: boolean;
+  plan?: LearningPlanResult["plan"];
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+export async function recommendLearning(): Promise<LearningPlanActionResult> {
+  try {
+    const identity = await resolveEmployeeId();
+    if ("error" in identity) return { ok: false, error: identity.error };
+
+    const result = await runLearningPlan();
+    return { ok: true, plan: result.plan, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong generating learning recommendations.") };
   }
 }

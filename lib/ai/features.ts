@@ -4,42 +4,67 @@ import { fetchEmployeeDetail } from "@/lib/hr/directory";
 import { generateStructuredJSON } from "@/lib/ai/router";
 import {
   attritionReportSchema,
+  candidateComparisonSchema,
+  candidateMatchSchema,
   candidateRankingSchema,
   careerRecommendationsSchema,
   employeeAnalysisSchema,
+  employeeBriefSchema,
   insightsWrapperSchema,
   interviewEvaluationSchema,
   interviewQuestionsSchema,
+  learningPlanSchema,
   onboardingPlanSchema,
   performanceAnalysisSchema,
+  performanceCoachSchema,
   policyAnswerSchema,
+  resumeAnalysisSchema,
+  sharpenedGoalSchema,
+  skillPlanSchema,
   skillRecommendationSchema,
   type AttritionReport,
+  type CandidateComparison,
+  type CandidateMatch,
   type CandidateRanking,
   type CareerRecommendations,
   type EmployeeAnalysis,
+  type EmployeeBrief,
   type GeminiInsight,
   type InterviewEvaluation,
   type InterviewQuestions,
+  type LearningPlan,
   type OnboardingPlan,
   type PerformanceAnalysis,
+  type PerformanceCoach,
   type PolicyAnswer,
+  type ResumeAnalysis,
+  type SharpenedGoal,
+  type SkillPlan,
   type SkillRecommendationReport,
   normalizeAttritionReport,
+  normalizeCandidateComparison,
+  normalizeCandidateMatch,
   normalizeCandidateRanking,
   normalizeCareerRecommendations,
   normalizeEmployeeAnalysis,
+  normalizeEmployeeBrief,
   normalizeInsights,
   normalizeInterviewEvaluation,
   normalizeInterviewQuestions,
+  normalizeLearningPlan,
   normalizeOnboardingPlan,
   normalizePerformanceAnalysis,
+  normalizePerformanceCoach,
   normalizePolicyAnswer,
+  normalizeResumeAnalysis,
+  normalizeSharpenedGoal,
+  normalizeSkillPlan,
   normalizeSkillRecommendations,
 } from "@/lib/ai/schemas";
 import type { AiInsight } from "@/types";
 import { saveInsights, toInsightRecord } from "@/lib/ai/store";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { fetchEmployeeDetailSelf } from "@/lib/employee/data";
 
 // ---------------------------------------------------------------------------
 // Responsible AI guardrails — attached to every Gemini request.
@@ -1313,4 +1338,902 @@ export async function generateCareerRecommendations(employeeId: string): Promise
   ]);
 
   return { recommendations, saved, persistError };
+}
+
+// ---------------------------------------------------------------------------
+// 12. Resume analysis (Gemini structure extraction)
+// ---------------------------------------------------------------------------
+
+export interface AnalyzeResumeResult {
+  analysis: ResumeAnalysis;
+}
+
+export async function analyzeResume(candidateId: string): Promise<AnalyzeResumeResult> {
+  const supabase = requireSupabase();
+
+  const [candRes, resumeRes] = await Promise.all([
+    supabase.from("candidates").select("id, full_name, email").eq("id", candidateId).maybeSingle(),
+    supabase.from("resumes").select("id, content_text, file_name").eq("candidate_id", candidateId).order("uploaded_at", { ascending: false }).limit(1),
+  ]);
+  checkQuery("candidate", candRes);
+  checkQuery("resume", resumeRes);
+
+  const candidate = candRes.data as { id: string; full_name: string; email: string } | null;
+  if (!candidate) throw new Error("Candidate not found.");
+
+  const resume = resumeRes.data?.[0] as { content_text: string | null; file_name: string | null } | undefined;
+  const resumeText = resume?.content_text?.trim() ?? "";
+  if (resumeText.length < 80) {
+    throw new Error("No extractable resume text yet. Upload a PDF, DOCX or TXT resume and try again.");
+  }
+
+  const prompt = [
+    `Analyze the resume text below and extract a structured candidate profile.`,
+    `Candidate record currently holds: name "${candidate.full_name}", email "${candidate.email}".`,
+    "",
+    "Resume text:",
+    "------------------",
+    resumeText.slice(0, 9000),
+    "------------------",
+    "",
+    "Return the resume analysis JSON (full_name, email, phone, current_title, location, summary, years_of_experience, education, skills, projects, certifications, relevant_experience).",
+    "Extract ONLY facts present in the resume. Ignore anything that reveals gender, age, race, religion, marital status, disability, or nationality — never include such characteristics anywhere in the output.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: resumeAnalysisSchema,
+    temperature: 0.2,
+  });
+  const analysis = normalizeResumeAnalysis(parsed);
+
+  // Persist the structured profile + skills so matching and the UI read from data.
+  const updates: Record<string, unknown> = {
+    current_title: analysis.current_title || null,
+    summary: analysis.summary || null,
+    experience_years: analysis.years_of_experience > 0 ? analysis.years_of_experience : null,
+    education: analysis.education || null,
+    projects: analysis.projects.length ? analysis.projects.join("\n") : null,
+    certifications: analysis.certifications.length ? analysis.certifications.join("\n") : null,
+    relevant_experience: analysis.relevant_experience || null,
+  };
+  if (!candidate.full_name.trim() && analysis.full_name) updates.full_name = analysis.full_name;
+  if (candidate.email === "candidate@unknown" || !candidate.email.includes("@")) {
+    if (analysis.email.includes("@")) updates.email = analysis.email;
+  }
+
+  const { error: updErr } = await supabase.from("candidates").update(updates).eq("id", candidateId);
+  if (updErr) console.warn(`[analyzeResume] candidate update failed: ${updErr.message}`);
+
+  if (analysis.skills.length > 0) {
+    await syncCandidateSkills(supabase, candidateId, analysis.skills);
+  }
+
+  return { analysis };
+}
+
+// ---------------------------------------------------------------------------
+// 13. Candidate-job matching (deterministic scoring + Gemini reasoning)
+// ---------------------------------------------------------------------------
+
+export interface MatchCandidateResult {
+  match: CandidateMatch;
+}
+
+interface DeterministicScores {
+  skill: number;
+  experience: number;
+  roleRelevance: number;
+  education: number;
+  matchedRequiredSkills: string[];
+  missingRequiredSkills: string[];
+  experienceNote: string;
+  educationNote: string;
+}
+
+/** Lowercases and normalizes a skill list written as comma/newline-or concatenation. */
+function parseSkillList(text: string | null | undefined): string[] {
+  const parts = (text ?? "")
+    .split(/[\n,;•]|\band\b|&/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of parts) {
+    const norm = part.toLowerCase().replace(/\s+/g, " ").trim();
+    if (norm && !seen.has(norm)) {
+      seen.add(norm);
+      out.push(norm);
+    }
+  }
+  return out;
+}
+
+function normalizeCandidateSkills(skills: string[]): Set<string> {
+  const set = new Set<string>();
+  for (const s of skills) {
+    const norm = s.toLowerCase().replace(/\s+/g, " ").trim();
+    if (norm) set.add(norm);
+  }
+  return set;
+}
+
+function tokens(text: string | null | undefined): Set<string> {
+  return new Set(
+    (text ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9+#.]+/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length > 2)
+  );
+}
+
+function requiredYearsBound(text: string | null | undefined): { min: number; max: number } | null {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const range = lower.match(/(\d+)\s*(?:-|–|to)\s*(\d+)/);
+  if (range) {
+    const lo = Number(range[1]);
+    const hi = Number(range[2]);
+    return { min: Math.min(lo, hi), max: Math.max(lo, hi) };
+  }
+  const capped = lower.match(/(\d+)\s*\+?\s*(?:years?|yrs?)/);
+  if (capped) {
+    const y = Number(capped[1]);
+    return { min: y, max: y };
+  }
+  const bare = lower.match(/(\d+)/);
+  if (bare) return { min: Number(bare[1]), max: Number(bare[1]) };
+  return null;
+}
+
+function experienceScore(candidateYears: number | null, requirement: string | null | undefined): { score: number; note: string } {
+  if (candidateYears == null) {
+    return { score: 50, note: "Total experience not stated on the resume yet." };
+  }
+  const bound = requiredYearsBound(requirement);
+  if (!bound) {
+    return { score: 70, note: `No explicit experience requirement; candidate reports ${candidateYears} years.` };
+  }
+  if (candidateYears >= bound.max) {
+    return { score: 100, note: `${candidateYears} years exceeds the ${bound.min}+ requirement.` };
+  }
+  if (candidateYears >= bound.min) {
+    return { score: 85, note: `${candidateYears} years meets the ${bound.min}+ years requirement.` };
+  }
+  const ratio = candidateYears / bound.max;
+  const score = ratio >= 0.8 ? 65 : ratio >= 0.6 ? 45 : ratio >= 0.4 ? 30 : 15;
+  return { score, note: `${candidateYears} years is below the ${bound.min}+ years asked for.` };
+}
+
+function roleRelevanceScore(
+  job: { title: string; description: string | null },
+  candidate: { current_title: string | null; summary: string | null; relevant_experience: string | null }
+): number {
+  const query = tokens(`${job.title} ${job.description ?? ""}`);
+  const haystack = tokens(`${candidate.current_title ?? ""} ${candidate.summary ?? ""} ${candidate.relevant_experience ?? ""}`);
+  if (haystack.size === 0) return 40;
+  let hits = 0;
+  for (const q of query) if (haystack.has(q)) hits += 1;
+  if (hits === 0) return 40;
+  const coverage = hits / Math.max(1, query.size);
+  return Math.min(100, Math.round(coverage * 230));
+}
+
+const DEGREE_LEVELS: Array<{ level: number; tokens: string[] }> = [
+  { level: 5, tokens: ["phd", "doctorate", "m.d."] },
+  { level: 4, tokens: ["master", "mba", "m.sc", "msc", "m.eng"] },
+  { level: 3, tokens: ["bachelor", "b.sc", "bsc", "b.eng", "engineering degree", "ba in", "bs in"] },
+  { level: 2, tokens: ["associate", "diploma", "hnd"] },
+  { level: 1, tokens: ["high school", "school diploma", "certificate"] },
+];
+
+function educationScore(
+  requirement: string | null | undefined,
+  candidateEducation: string | null | undefined
+): { score: number; note: string } {
+  if (!requirement) return { score: 70, note: "No education requirement set for this role." };
+  const wantedLower = requirement.toLowerCase();
+  const have = candidateEducation?.toLowerCase() ?? "";
+  const wantedDegree = DEGREE_LEVELS.find((d) => d.tokens.some((t) => wantedLower.includes(t)));
+  const haveDegree = DEGREE_LEVELS.find((d) => d.tokens.some((t) => have.includes(t)));
+
+  if (!have.trim()) {
+    return { score: 40, note: `Education not stated on the resume (role asks for: ${requirement}).` };
+  }
+  if (haveDegree && wantedDegree) {
+    return haveDegree.level >= wantedDegree.level
+      ? { score: 100, note: `Education level (${requirement}) is covered on the resume.` }
+      : { score: 55, note: `Role asks for ${wantedDegree.tokens[0]}-level education; resume lists ${haveDegree.tokens[0]}-level.` };
+  }
+  const wantedTokens = tokens(requirement);
+  const haveTokens = tokens(candidateEducation);
+  const overlap = [...wantedTokens].filter((t) => haveTokens.has(t)).length;
+  if (overlap > 0) return { score: 85, note: "Education field overlaps with the requirement." };
+  return { score: 60, note: `Education is listed but does not clearly match "${requirement}".` };
+}
+
+function computeDeterministicScores(
+  job: {
+    title: string;
+    description: string | null;
+    required_skills: string | null;
+    preferred_skills: string | null;
+    experience: string | null;
+    education: string | null;
+  },
+  candidate: {
+    current_title: string | null;
+    summary: string | null;
+    relevant_experience: string | null;
+    education: string | null;
+    experience_years: number | null;
+  },
+  candidateSkills: string[]
+): DeterministicScores {
+  const required = parseSkillList(job.required_skills);
+  const preferred = parseSkillList(job.preferred_skills);
+  const have = normalizeCandidateSkills(candidateSkills);
+
+  const matchedRequired = required.filter((r) =>
+    [...have].some((c) => c === r || c.includes(r) || r.includes(c))
+  );
+  const matchedPreferred = preferred.filter((r) =>
+    [...have].some((c) => c === r || c.includes(r) || r.includes(c))
+  );
+  const missingRequiredSkills = required.filter((r) => !matchedRequired.includes(r));
+
+  const reqRatio = required.length ? matchedRequired.length / required.length : 0;
+  const prefRatio = preferred.length ? matchedPreferred.length / preferred.length : 0;
+  const skill =
+    required.length === 0 && preferred.length === 0
+      ? 50
+      : Math.round(((reqRatio * 0.75 + prefRatio * 0.25) * 100) || 0);
+
+  const exp = experienceScore(candidate.experience_years, job.experience);
+  const role = roleRelevanceScore(job, candidate);
+  const edu = educationScore(job.education, candidate.education);
+
+  return {
+    skill,
+    experience: exp.score,
+    roleRelevance: role,
+    education: edu.score,
+    matchedRequiredSkills: matchedRequired,
+    missingRequiredSkills,
+    experienceNote: exp.note,
+    educationNote: edu.note,
+  };
+}
+
+function blendScore(deterministic: number, gemini: number): number {
+  return Math.round(0.7 * deterministic + 0.3 * Math.max(0, Math.min(100, gemini)));
+}
+
+async function syncCandidateSkills(
+  supabase: NonNullable<ReturnType<typeof getSupabaseServer>>,
+  candidateId: string,
+  skillNames: string[]
+): Promise<void> {
+  const normalized = Array.from(new Set(skillNames.map((s) => s.trim()).filter(Boolean)));
+  if (normalized.length === 0) return;
+
+  const { data: existing } = await supabase.from("skills").select("id, name").in("name", normalized);
+  const idByLower = new Map<string, string>();
+  for (const row of existing ?? []) idByLower.set(String(row.name).toLowerCase(), row.id);
+
+  const toCreate = normalized.filter((n) => !idByLower.has(n.toLowerCase()));
+  if (toCreate.length > 0) {
+    const { data: created, error } = await supabase
+      .from("skills")
+      .insert(toCreate.map((name) => ({ name, category: "candidate" })))
+      .select("id, name");
+    if (error) console.warn(`[analyzeResume] skill insert failed: ${error.message}`);
+    for (const row of created ?? []) idByLower.set(String(row.name).toLowerCase(), row.id);
+  }
+
+  const links = normalized
+    .map((n) => idByLower.get(n.toLowerCase()))
+    .filter((id): id is string => Boolean(id))
+    .map((skill_id) => ({ candidate_id: candidateId, skill_id }));
+  if (links.length > 0) {
+    const { error } = await supabase.from("candidate_skills").upsert(links, { onConflict: "candidate_id,skill_id" });
+    if (error) console.warn(`[analyzeResume] candidate_skills insert failed: ${error.message}`);
+  }
+}
+
+export async function matchCandidate(candidateId: string): Promise<MatchCandidateResult> {
+  const supabase = requireSupabase();
+
+  const [candRes, jobRes, skillsRes, resumeRes] = await Promise.all([
+    supabase
+      .from("candidates")
+      .select(
+        "id, full_name, email, status, job_id, current_title, summary, experience_years, education, projects, certifications, relevant_experience"
+      )
+      .eq("id", candidateId)
+      .maybeSingle(),
+    supabase
+      .from("candidates")
+      .select(
+        "job_id, jobs(title, departments(name), description, required_skills, preferred_skills, experience, education, seniority, employment_type)"
+      )
+      .eq("id", candidateId)
+      .maybeSingle(),
+    supabase.from("candidate_skills").select("skills(name)").eq("candidate_id", candidateId),
+    supabase.from("resumes").select("content_text").eq("candidate_id", candidateId).order("uploaded_at", { ascending: false }).limit(1),
+  ]);
+  checkQuery("candidate", candRes);
+  checkQuery("candidate.job", jobRes);
+  checkQuery("candidate_skills", skillsRes);
+  checkQuery("resumes", resumeRes);
+
+  const candidate = candRes.data as {
+    id: string;
+    full_name: string;
+    email: string;
+    status: string;
+    job_id: string | null;
+    current_title: string | null;
+    summary: string | null;
+    experience_years: number | null;
+    education: string | null;
+    projects: string | null;
+    certifications: string | null;
+    relevant_experience: string | null;
+  } | null;
+  if (!candidate) throw new Error("Candidate not found.");
+
+  const jobRow = (jobRes.data as unknown as {
+    job_id: string | null;
+    jobs: {
+      title: string | null;
+      departments: { name: string } | null;
+      description: string | null;
+      required_skills: string | null;
+      preferred_skills: string | null;
+      experience: string | null;
+      education: string | null;
+      seniority: string | null;
+      employment_type: string | null;
+    } | null;
+  } | null) ?? null;
+  const job = jobRow?.jobs;
+  if (!candidate.job_id || !job) throw new Error("This candidate has no job to match against. Assign them to a role first.");
+
+  const skills = (skillsRes.data ?? []) as unknown as { skills: { name: string } | null }[];
+  const candidateSkills = skills.map((s) => s.skills?.name).filter((n): n is string => Boolean(n));
+  const resumeText = (resumeRes.data?.[0] as { content_text: string | null } | undefined)?.content_text ?? "";
+
+  const det = computeDeterministicScores(
+    {
+      title: job.title ?? "Role",
+      description: job.description,
+      required_skills: job.required_skills,
+      preferred_skills: job.preferred_skills,
+      experience: job.experience,
+      education: job.education,
+    },
+    candidate,
+    candidateSkills
+  );
+
+  const prompt = [
+    `Assess how well candidate ${candidate.full_name} matches the role "${job.title ?? "Role"}" (${job.departments?.name ?? "Unassigned"}, ${job.seniority ?? "any seniority"}, ${job.employment_type ?? "unspecified"}).`,
+    `Candidate stage: ${candidate.status}.`,
+    "",
+    "Job requirements:",
+    `- Required skills: ${job.required_skills ?? "—"}`,
+    `- Preferred skills: ${job.preferred_skills ?? "—"}`,
+    `- Experience: ${job.experience ?? "—"}`,
+    `- Education: ${job.education ?? "—"}`,
+    `- Description: ${job.description ?? "—"}`,
+    "",
+    "Candidate profile (from resume + extracted data):",
+    `- Current title: ${candidate.current_title ?? "—"}`,
+    `- Experience: ${candidate.experience_years ?? "unknown"} years`,
+    `- Education: ${candidate.education ?? "—"}`,
+    `- Projects: ${candidate.projects ?? "—"}`,
+    `- Certifications: ${candidate.certifications ?? "—"}`,
+    `- Relevant experience: ${candidate.relevant_experience ?? "—"}`,
+    `- Candidate skills: ${candidateSkills.join(", ") || "none listed"}`,
+    resumeText ? `- Resume excerpt: ${resumeText.slice(0, 4000)}` : "- No resume text on file.",
+    "",
+    `Deterministic pre-scores (from an independent rule-based scorer — refine them if the resume evidence disagrees, staying within 10 points):`,
+    `- Skill match: ${det.skill}/100`,
+    `- Experience match: ${det.experience}/100 (${det.experienceNote})`,
+    `- Role relevance: ${det.roleRelevance}/100`,
+    `- Education match: ${det.education}/100 (${det.educationNote})`,
+    "",
+    "Return the candidate match JSON (candidate_name, job_title, overall_score, skill_match, experience_match, role_relevance, education_match, recommendation, summary, why_matches, missing_requirements, relevant_evidence, interview_focus, strengths, gaps, next_step, confidence).",
+    "Ground every claim in the provided data. Never use protected characteristics. Do not recommend rejection — at worst use 'needs_assessment'. The final hiring decision always belongs to HR.",
+    `Nudge: explicitly note these likely gaps if accurate: ${det.missingRequiredSkills.join(", ") || "none"} (skills), ${det.experienceNote}. ${det.educationNote}`,
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: candidateMatchSchema,
+    temperature: 0.2,
+  });
+  const gemini = normalizeCandidateMatch(parsed);
+
+  const skill = blendScore(det.skill, gemini.skill_match);
+  const experience = blendScore(det.experience, gemini.experience_match);
+  const roleRelevance = blendScore(det.roleRelevance, gemini.role_relevance);
+  const education = blendScore(det.education, gemini.education_match);
+  const overall = Math.round(skill * 0.4 + experience * 0.25 + roleRelevance * 0.2 + education * 0.15);
+
+  const missing = Array.from(new Set([...gemini.missing_requirements, ...det.missingRequiredSkills]));
+
+  const match: CandidateMatch = {
+    candidate_name: gemini.candidate_name || candidate.full_name,
+    job_title: gemini.job_title || (job.title ?? "Role"),
+    overall_match: overall,
+    skill_match: skill,
+    experience_match: experience,
+    role_relevance: roleRelevance,
+    education_match: education,
+    recommendation: gemini.recommendation,
+    summary: gemini.summary,
+    why_matches: gemini.why_matches,
+    missing_requirements: missing,
+    relevant_evidence: gemini.relevant_evidence,
+    interview_focus: gemini.interview_focus,
+    strengths: gemini.strengths,
+    gaps: gemini.gaps,
+    next_step: gemini.next_step,
+    confidence: gemini.confidence,
+  };
+
+  const { error } = await supabase.from("candidate_assessments").upsert(
+    {
+      candidate_id: candidate.id,
+      job_id: candidate.job_id,
+      overall_match: match.overall_match,
+      skill_match: match.skill_match,
+      experience_match: match.experience_match,
+      role_relevance: match.role_relevance,
+      education_match: match.education_match,
+      recommendation: match.recommendation,
+      summary: match.summary,
+      why_matches: match.why_matches,
+      missing_requirements: match.missing_requirements,
+      relevant_evidence: match.relevant_evidence,
+      interview_focus: match.interview_focus,
+      strengths: match.strengths,
+      gaps: match.gaps,
+      next_step: match.next_step,
+      confidence: match.confidence,
+    },
+    { onConflict: "candidate_id,job_id" }
+  );
+  if (error) console.warn(`[matchCandidate] assessment persist failed: ${error.message}`);
+
+  return { match };
+}
+
+// ---------------------------------------------------------------------------
+// 14. Candidate comparison (table + Gemini narrative)
+// ---------------------------------------------------------------------------
+
+export interface CandidateCompareRow {
+  candidate_id: string;
+  name: string;
+  job_title: string;
+  overall_match: number | null;
+  skill_match: number | null;
+  experience_match: number | null;
+  role_relevance: number | null;
+  education_match: number | null;
+  recommendation: CandidateMatch["recommendation"] | null;
+  skills: string[];
+  experience_years: number | null;
+  education: string | null;
+  strengths: string[];
+  gaps: string[];
+  interview_focus: string[];
+  missing_requirements: string[];
+}
+
+export interface CompareCandidatesResult {
+  comparison: CandidateComparison;
+  rows: CandidateCompareRow[];
+}
+
+export async function compareCandidates(candidateIds: string[]): Promise<CompareCandidatesResult> {
+  const uniqueIds = Array.from(new Set(candidateIds.filter(Boolean)));
+  if (uniqueIds.length < 2) throw new Error("Select at least two candidates to compare.");
+
+  const supabase = requireSupabase();
+  const [candRes, skillsRes, assessmentRes] = await Promise.all([
+    supabase
+      .from("candidates")
+      .select("id, full_name, experience_years, education, job_id, jobs(title)")
+      .in("id", uniqueIds),
+    supabase.from("candidate_skills").select("candidate_id, skills(name)").in("candidate_id", uniqueIds),
+    supabase.from("candidate_assessments").select("*").in("candidate_id", uniqueIds),
+  ]);
+  checkQuery("candidates", candRes);
+  checkQuery("candidate_skills", skillsRes);
+  checkQuery("candidate_assessments", assessmentRes);
+
+  const skillByCand = new Map<string, string[]>();
+  for (const row of (skillsRes.data ?? []) as unknown as { candidate_id: string; skills: { name: string } | null }[]) {
+    const name = row.skills?.name;
+    if (!name) continue;
+    const list = skillByCand.get(row.candidate_id) ?? [];
+    list.push(name);
+    skillByCand.set(row.candidate_id, list);
+  }
+
+  const assessmentByCand = new Map<string, CandidateMatch>();
+  for (const row of (assessmentRes.data ?? []) as unknown as Record<string, unknown>[]) {
+    const candidateId = asStringVal(row.candidate_id);
+    if (!candidateId) continue;
+    if (!assessmentByCand.has(candidateId)) {
+      // Assessments are persisted with overall_match; the AI normalizer reads
+      // overall_score (the Gemini field name), so map it before normalizing.
+      const mapped = { ...row, overall_score: row.overall_match };
+      assessmentByCand.set(candidateId, normalizeCandidateMatch(mapped));
+    }
+  }
+
+  const raw = (candRes.data ?? []) as unknown as {
+    id: string;
+    full_name: string;
+    experience_years: number | null;
+    education: string | null;
+    job_id: string | null;
+    jobs: { title: string } | null;
+  }[];
+
+  const rows: CandidateCompareRow[] = raw.map((c) => {
+    const a = assessmentByCand.get(c.id);
+    return {
+      candidate_id: c.id,
+      name: c.full_name,
+      job_title: c.jobs?.title ?? "",
+      overall_match: a?.overall_match ?? null,
+      skill_match: a?.skill_match ?? null,
+      experience_match: a?.experience_match ?? null,
+      role_relevance: a?.role_relevance ?? null,
+      education_match: a?.education_match ?? null,
+      recommendation: a?.recommendation ?? null,
+      skills: skillByCand.get(c.id) ?? [],
+      experience_years: c.experience_years != null ? Number(c.experience_years) : null,
+      education: c.education,
+      strengths: a?.strengths ?? [],
+      gaps: a?.gaps ?? [],
+      interview_focus: a?.interview_focus ?? [],
+      missing_requirements: a?.missing_requirements ?? [],
+    };
+  });
+
+  const profileBlock = rows
+    .map(
+      (r) =>
+        `- ${r.name} [${r.job_title || "no role"}]: ${
+          aRow(r, "overall_match", "Overall")}, ${aRow(r, "skill_match", "Skills")}, ${aRow(r, "experience_match", "Experience")}, ${aRow(r, "education_match", "Education")}\n  skills: ${r.skills.join(", ") || "—"}\n  experience: ${
+            r.experience_years ?? "unknown"
+          } years · education: ${r.education ?? "—"}\n  strengths: ${r.strengths.join("; ") || "—"}\n  gaps: ${r.gaps.join("; ") || "—"}`
+      )
+      .join("\n");
+
+  const prompt = [
+    `Compare the following candidates for the same role and produce a short comparative read.`,
+    "",
+    "Candidates:",
+    profileBlock,
+    "",
+    "Return the candidate comparison JSON (headline, recommended_candidate, candidate_notes with candidate_name/note, confidence).",
+    "Compare only on job-relevant skills, experience and evidence. Never use protected characteristics. No candidate should be labelled for rejection — choose 'Mixed — review both' when it is close.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: candidateComparisonSchema,
+    temperature: 0.3,
+  });
+
+  return { comparison: normalizeCandidateComparison(parsed), rows };
+}
+
+function asStringVal(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function aRow(row: CandidateCompareRow, key: keyof Pick<CandidateCompareRow, "overall_match" | "skill_match" | "experience_match" | "role_relevance" | "education_match">, label: string): string {
+  const v = row[key];
+  return v == null ? `${label}: not scored` : `${label} ${v}/100`;
+}
+
+// ---------------------------------------------------------------------------
+// 15. Personal AI workforce brief (/employee/dashboard)
+// ---------------------------------------------------------------------------
+
+export interface GenerateEmployeeBriefResult {
+  brief: EmployeeBrief;
+  saved: number;
+  persistError?: string;
+}
+
+export async function generateEmployeeBrief(): Promise<GenerateEmployeeBriefResult> {
+  const detail = await fetchEmployeeDetailSelf();
+  if (!detail) throw new Error("Your employee profile is not linked yet.");
+  const pkg = buildEmployeeAnalysis(detail);
+
+  const prompt = [
+    prepareEmployeePrompt(pkg),
+    "",
+    "Write a personal AI workforce brief for the employee, in second person, from the summarized signals above.",
+    "Return the employee brief JSON (headline, summary, focus_areas with area/why/action, recommended_action, insights, confidence).",
+    "Speak directly to the employee. Prioritize 2-4 concrete focus areas tied to their goals, skill gaps, and feedback.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: employeeBriefSchema,
+    temperature: 0.4,
+  });
+
+  const brief = normalizeEmployeeBrief(parsed);
+
+  const { saved, persistError } = await persistInsights("employee-brief", [
+    toInsightRecord({
+      title: `Your AI brief: ${brief.headline}`,
+      severity: "low",
+      summary: brief.summary,
+      evidence: brief.focus_areas.map((f) => `${f.area}: ${f.why}`),
+      reasoning: "Derived from your goals, skills, performance, feedback, and training data.",
+      confidence: brief.confidence,
+      recommended_action: brief.recommended_action,
+      action_type: "check-in",
+      affected_entities: [detail.name],
+    }, "engagement"),
+  ]);
+
+  return { brief, saved, persistError };
+}
+
+// ---------------------------------------------------------------------------
+// 16. Goal sharpening (/employee/goals)
+// ---------------------------------------------------------------------------
+
+export interface SharpenGoalInput {
+  title: string;
+  description?: string;
+}
+
+export interface SharpenGoalResult {
+  goal: SharpenedGoal;
+}
+
+export async function sharpenGoal(input: SharpenGoalInput): Promise<SharpenGoalResult> {
+  if (!input.title.trim()) throw new Error("Goal title is required.");
+
+  const detail = await fetchEmployeeDetailSelf();
+  if (!detail) throw new Error("Your employee profile is not linked yet.");
+  const pkg = buildEmployeeAnalysis(detail);
+
+  const prompt = [
+    prepareEmployeePrompt(pkg),
+    "",
+    `Rewrite the goal below into a measurable, achievable goal for this employee.`,
+    `Original goal: "${input.title}"${input.description?.trim() ? ` — ${input.description.trim()}` : ""}`,
+    "",
+    "Return the sharpened goal JSON (title, description, success_criteria, kpis, milestones with label/weeks/progress, confidence).",
+    "Keep it realistic given the employee's role, skill level, and current goal load. Never invent facts about them not present above.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: sharpenedGoalSchema,
+    temperature: 0.35,
+  });
+
+  return { goal: normalizeSharpenedGoal(parsed) };
+}
+
+// ---------------------------------------------------------------------------
+// 17. Personal skill plan (/employee/skills)
+// ---------------------------------------------------------------------------
+
+export interface SkillPlanResult {
+  plan: SkillPlan;
+  saved: number;
+  persistError?: string;
+}
+
+export async function recommendSkillPlan(): Promise<SkillPlanResult> {
+  const detail = await fetchEmployeeDetailSelf();
+  if (!detail) throw new Error("Your employee profile is not linked yet.");
+  const pkg = buildEmployeeAnalysis(detail);
+
+  const skillLines = detail.skills.length
+    ? detail.skills
+        .map((s) => `- ${s.name}${s.proficiency ? ` (proficiency ${s.proficiency})` : ""}${s.verified ? " [verified]" : ""}`)
+        .join("\n")
+    : "No skills on profile yet.";
+
+  const prompt = [
+    prepareEmployeePrompt(pkg),
+    "",
+    "Skills currently on the employee's profile:",
+    skillLines,
+    "",
+    "Return the skill plan JSON (headline, overall_coverage_pct, recommendations with skill/current_proficiency/target_proficiency/gap/priority/rationale/courses/projects/career_paths, confidence).",
+    "Recommend 3-6 skills that best serve their role, career direction, and current gaps. Ground every recommendation in the provided profile — never protected characteristics.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: skillPlanSchema,
+    temperature: 0.35,
+  });
+
+  const plan = normalizeSkillPlan(parsed);
+
+  const { saved, persistError } = await persistInsights("skill-plan", [
+    toInsightRecord({
+      title: `Skill plan: ${plan.recommendations[0]?.skill ?? "grow key skills"}`,
+      severity: "low",
+      summary: plan.headline || `Close your gaps starting with ${plan.recommendations[0]?.skill ?? "high-priority skills"}.`,
+      evidence: plan.recommendations.map((r) => `${r.skill}: ${r.gap} gap (${r.current_proficiency}→${r.target_proficiency})`).slice(0, 3),
+      reasoning: "Derived from the employee's skills, role, and career-facing analysis.",
+      confidence: plan.confidence,
+      recommended_action: plan.recommendations[0]?.projects[0] ?? "Start the first skill exercise this week.",
+      action_type: "training",
+      affected_entities: [detail.name],
+    }, "skills"),
+  ]);
+
+  return { plan, saved, persistError };
+}
+
+// ---------------------------------------------------------------------------
+// 18. "What should I improve?" performance coach (/employee/performance)
+// ---------------------------------------------------------------------------
+
+export interface PerformanceCoachResult {
+  coach: PerformanceCoach;
+  saved: number;
+  persistError?: string;
+}
+
+export async function explainPerformance(): Promise<PerformanceCoachResult> {
+  const detail = await fetchEmployeeDetailSelf();
+  if (!detail) throw new Error("Your employee profile is not linked yet.");
+  const pkg = buildEmployeeAnalysis(detail);
+
+  const latestReview = detail.reviews[0];
+  const reviewBlock = latestReview
+    ? `Latest review (${latestReview.periodEnd ?? "n/a"}): rating ${latestReview.rating ?? "n/a"}/5\n  strengths: ${latestReview.strengths ?? "—"}\n  improvements: ${latestReview.improvements ?? "—"}`
+    : "No completed reviews yet.";
+
+  const feedbackBlock = detail.feedback.length
+    ? detail.feedback.map((f) => `- [${f.category ?? "feedback"}] ${f.message ?? ""}`).join("\n")
+    : "No feedback records yet.";
+
+  const prompt = [
+    prepareEmployeePrompt(pkg),
+    "",
+    "Latest review:",
+    reviewBlock,
+    "",
+    "Recent feedback:",
+    feedbackBlock,
+    "",
+    "Act as a personal performance coach. Return the performance coach JSON (headline, strengths, improvement_focus answering 'what should I improve?', recommended_actions, confidence).",
+    "Be direct, specific, and grounded in the provided reviews and feedback. Keep improvement_focus to 2-4 items.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: performanceCoachSchema,
+    temperature: 0.35,
+  });
+
+  const coach = normalizePerformanceCoach(parsed);
+
+  const { saved, persistError } = await persistInsights("performance-coach", [
+    toInsightRecord({
+      title: "Performance coach: what should I improve?",
+      severity: "low",
+      summary: coach.headline,
+      evidence: coach.improvement_focus.map((item) => `Improve: ${item}`).slice(0, 3),
+      reasoning: "Derived from the employee's reviews and feedback signals.",
+      confidence: coach.confidence,
+      recommended_action: coach.recommended_actions[0] ?? "Discuss this plan with your manager.",
+      action_type: "check-in",
+      affected_entities: [detail.name],
+    }, "performance"),
+  ]);
+
+  return { coach, saved, persistError };
+}
+
+// ---------------------------------------------------------------------------
+// 19. Personalized learning recommendations (/employee/learning)
+// ---------------------------------------------------------------------------
+
+export interface LearningPlanResult {
+  plan: LearningPlan;
+  saved: number;
+  persistError?: string;
+}
+
+export async function recommendLearning(): Promise<LearningPlanResult> {
+  const detail = await fetchEmployeeDetailSelf();
+  if (!detail) throw new Error("Your employee profile is not linked yet.");
+  const pkg = buildEmployeeAnalysis(detail);
+
+  const catalogBlock = await loadCourseCatalog();
+
+  const prompt = [
+    prepareEmployeePrompt(pkg),
+    "",
+    "Available course catalog (prefer these when they fit):",
+    catalogBlock,
+    "",
+    "Return the learning plan JSON (headline, recommendations with course_title/provider/duration_hours/reason/supports_goals/priority, confidence).",
+    "Recommend 3-6 resources that close the employee's biggest skill gaps and support their career goals. Explain WHY each one for THIS employee.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: learningPlanSchema,
+    temperature: 0.35,
+  });
+
+  const plan = normalizeLearningPlan(parsed);
+
+  const { saved, persistError } = await persistInsights("learning-plan", [
+    toInsightRecord({
+      title: `Learning plan: ${plan.recommendations[0]?.course_title ?? "start with a top pick"}`,
+      severity: "low",
+      summary: plan.headline || `Build momentum with ${plan.recommendations[0]?.course_title ?? "a recommended course"}.`,
+      evidence: plan.recommendations.map((r) => `${r.course_title} (${r.priority}): ${r.reason}`).slice(0, 3),
+      reasoning: "Derived from the employee's skill gaps and career goals.",
+      confidence: plan.confidence,
+      recommended_action: plan.recommendations[0]?.course_title ?? "Pick a course and enroll this week.",
+      action_type: "training",
+      affected_entities: [detail.name],
+    }, "skills"),
+  ]);
+
+  return { plan, saved, persistError };
+}
+
+async function loadCourseCatalog(): Promise<string> {
+  const supabase = requireSupabase();
+  const { data: rows, error } = await supabase
+    .from("training_courses")
+    .select("title, provider, category, duration_hours, difficulty")
+    .limit(80);
+  if (error) return "—";
+  return ((rows ?? []) as unknown as {
+    title: string;
+    provider: string | null;
+    category: string | null;
+    duration_hours: number | null;
+    difficulty: string | null;
+  }[]).length
+    ? ((rows ?? []) as unknown as {
+        title: string;
+        provider: string | null;
+        category: string | null;
+        duration_hours: number | null;
+        difficulty: string | null;
+      }[])
+        .map((c) => `- ${c.title} (${c.provider ?? "internal"}${c.category ? `, ${c.category}` : ""}${c.duration_hours ? `, ${c.duration_hours}h` : ""}${c.difficulty ? `, ${c.difficulty}` : ""})`)
+        .join("\n")
+    : "—";
 }

@@ -1,20 +1,27 @@
 import type { Metadata } from "next";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { fetchMyOnboarding } from "@/lib/employee/data";
+
+import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
+import { OnboardingTasks } from "@/components/employee/onboarding/onboarding-tasks";
+import { SignInNotice } from "@/components/employee/sign-in-notice";
 
 export const metadata: Metadata = { title: "Onboarding" };
+export const dynamic = "force-dynamic";
 
-export default function OnboardingPage() {
+export default async function OnboardingPage() {
+  const plans = await fetchMyOnboarding();
+  if (!plans) return <SignInNotice />;
+
   return (
-    <FeaturePlaceholder
-      title="Onboarding"
-      description="Your ramp-up checklist: access, training, and first-project milestones."
-      highlights={[
-        "Step-by-step onboarding checklist with owners",
-        "Company and team training modules",
-        "Buddy and mentor assignments",
-        "AI-generated personalized ramp-up plan",
-      ]}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Onboarding"
+        description="Your ramp-up checklist: access, training, and first-project milestones."
+        badge={<Badge variant="outline">Live data</Badge>}
+      />
+      <OnboardingTasks plans={plans} />
+    </div>
   );
 }

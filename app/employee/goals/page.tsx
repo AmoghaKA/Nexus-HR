@@ -1,20 +1,27 @@
 import type { Metadata } from "next";
 
-import { FeaturePlaceholder } from "@/components/shared/feature-placeholder";
+import { fetchMyGoalsDetail } from "@/lib/employee/data";
+
+import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
+import { GoalManager } from "@/components/employee/goals/goal-manager";
+import { SignInNotice } from "@/components/employee/sign-in-notice";
 
 export const metadata: Metadata = { title: "My Goals" };
+export const dynamic = "force-dynamic";
 
-export default function GoalsPage() {
+export default async function GoalsPage() {
+  const goals = await fetchMyGoalsDetail();
+  if (!goals) return <SignInNotice />;
+
   return (
-    <FeaturePlaceholder
-      title="My Goals"
-      description="Objectives for the current cycle with progress updates and OKR alignment."
-      highlights={[
-        "Create, update, and close personal goals",
-        "Link goals to team and company objectives",
-        "Progress check-ins visible to your manager",
-        "AI assistance in drafting measurable goals",
-      ]}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="My Goals"
+        description="Track progress, log achievements, and let AI help you sharpen objectives."
+        badge={<Badge variant="outline">Live data</Badge>}
+      />
+      <GoalManager goals={goals} />
+    </div>
   );
 }

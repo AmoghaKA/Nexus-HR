@@ -109,7 +109,7 @@ export interface CandidateRanking {
   fit_summary: string;
   strengths: string[];
   concerns: string[];
-  recommended_stage: "new" | "screening" | "interview" | "offer" | "reject";
+  recommended_stage: "applied" | "screening" | "interview" | "evaluation" | "shortlisted" | "hired" | "rejected";
   recommended_action: string;
   confidence: number;
 }
@@ -160,6 +160,126 @@ export interface CareerRecommendations {
   headline: string;
   career_paths: CareerPath[];
   immediate_actions: string[];
+  confidence: number;
+}
+
+export interface ResumeAnalysis {
+  full_name: string;
+  email: string;
+  phone: string;
+  current_title: string;
+  location: string;
+  summary: string;
+  years_of_experience: number;
+  education: string;
+  skills: string[];
+  projects: string[];
+  certifications: string[];
+  relevant_experience: string;
+}
+
+export type CandidateRecommendation = "strong" | "potential" | "needs_assessment";
+
+export interface CandidateMatch {
+  candidate_name: string;
+  job_title: string;
+  overall_match: number; // 0..100
+  skill_match: number; // 0..100
+  experience_match: number; // 0..100
+  role_relevance: number; // 0..100
+  education_match: number; // 0..100
+  recommendation: CandidateRecommendation;
+  summary: string;
+  why_matches: string[];
+  missing_requirements: string[];
+  relevant_evidence: string[];
+  interview_focus: string[];
+  strengths: string[];
+  gaps: string[];
+  next_step: string;
+  confidence: number;
+}
+
+export interface CandidateComparison {
+  headline: string;
+  recommended_candidate: string;
+  candidate_notes: { candidate_name: string; note: string }[];
+  confidence: number;
+}
+
+// ---------------------------------------------------------------------------
+// Employee workspace contracts (sections 15-19)
+// ---------------------------------------------------------------------------
+
+export interface EmployeeBriefFocusArea {
+  area: string;
+  why: string;
+  action: string;
+}
+
+export interface EmployeeBrief {
+  headline: string;
+  summary: string;
+  focus_areas: EmployeeBriefFocusArea[];
+  recommended_action: string;
+  confidence: number;
+  insights: GeminiInsight[];
+}
+
+export interface SharpenedGoalMilestone {
+  label: string;
+  weeks: number;
+  progress: number;
+}
+
+export interface SharpenedGoal {
+  title: string;
+  description: string;
+  success_criteria: string[];
+  kpis: string[];
+  milestones: SharpenedGoalMilestone[];
+  confidence: number;
+}
+
+export interface SkillPlanRecommendation {
+  skill: string;
+  current_proficiency: number; // 0..5
+  target_proficiency: number; // 0..5
+  gap: "none" | "small" | "medium" | "large";
+  priority: "low" | "medium" | "high";
+  rationale: string;
+  courses: string[];
+  projects: string[];
+  career_paths: string[];
+}
+
+export interface SkillPlan {
+  headline: string;
+  overall_coverage_pct: number;
+  recommendations: SkillPlanRecommendation[];
+  confidence: number;
+}
+
+export interface PerformanceCoach {
+  headline: string;
+  strengths: string[];
+  improvement_focus: string[];
+  recommended_actions: string[];
+  confidence: number;
+}
+
+export interface LearningRecommendationPlan {
+  course_title: string;
+  provider: string;
+  duration_hours: number;
+  reason: string;
+  supports_goals: string[];
+  priority: "low" | "medium" | "high";
+}
+
+export interface LearningPlan {
+  headline: string;
+  recommendations: LearningRecommendationPlan[];
   confidence: number;
 }
 
@@ -327,7 +447,7 @@ export const candidateRankingSchema: Schema = obj(
     fit_summary: str("Short summary of fit"),
     strengths: arr("Relevant strengths", str("Strength")),
     concerns: arr("Concerns / gaps", str("Concern")),
-    recommended_stage: strEnum("Recommended next pipeline stage", ["new", "screening", "interview", "offer", "reject"]),
+    recommended_stage: strEnum("Recommended next pipeline stage", ["applied", "screening", "interview", "evaluation", "shortlisted", "hired", "rejected"]),
     recommended_action: str("Concrete next step for the recruiter"),
     confidence: num("Model confidence between 0 and 1"),
   },
@@ -371,6 +491,94 @@ export const interviewEvaluationSchema: Schema = obj(
   ["headline", "overall_score", "dimensions", "highlights", "risks", "recommendation", "next_step", "confidence"]
 );
 
+export const resumeAnalysisSchema: Schema = obj(
+  "Structured candidate profile extracted from a resume. Extract ONLY job-relevant facts present in the text — never invent anything and never record or infer protected characteristics (gender, age, race, religion, marital/family status, disability, nationality).",
+  {
+    full_name: str("Candidate full name as printed on the resume"),
+    email: str("Email address if present, otherwise empty"),
+    phone: str("Phone number if present, otherwise empty"),
+    current_title: str("Most recent job title or headline"),
+    location: str("City/region if present, otherwise empty"),
+    summary: str("1-3 sentence professional summary"),
+    years_of_experience: integer("Total years of relevant professional experience (0 if unknown)"),
+    education: str("Highest degree and institution, e.g. 'BSc Computer Science, TU Berlin, 2016'"),
+    skills: arr("Skills and technologies from the resume", str("Skill")),
+    projects: arr("Notable projects from the resume", str("Project")),
+    certifications: arr("Certifications and licenses", str("Certification")),
+    relevant_experience: str("Short paragraph or list of roles most relevant to the target role"),
+  },
+  [
+    "full_name",
+    "email",
+    "phone",
+    "current_title",
+    "location",
+    "summary",
+    "years_of_experience",
+    "education",
+    "skills",
+    "projects",
+    "certifications",
+    "relevant_experience",
+  ]
+);
+
+export const candidateMatchSchema: Schema = obj(
+  "Candidate-job match assessment. Blend the deterministic scores with resume evidence. Use ONLY the provided data and never protected characteristics. Never recommend rejection — at worst mark 'needs_assessment'.",
+  {
+    candidate_name: str("Candidate full name"),
+    job_title: str("Job title"),
+    overall_score: integer("Overall match 0-100"),
+    skill_match: integer("Skill dimension score 0-100"),
+    experience_match: integer("Experience dimension score 0-100"),
+    role_relevance: integer("Role relevance score 0-100"),
+    education_match: integer("Education dimension score 0-100"),
+    recommendation: strEnum("Overall AI recommendation", ["strong", "potential", "needs_assessment"]),
+    summary: str("1-2 sentence plain-language summary of the fit"),
+    why_matches: arr("Reasons the candidate matches this role", str("Reason")),
+    missing_requirements: arr("Requirements the candidate does not clearly meet", str("Missing requirement")),
+    relevant_evidence: arr("Concrete evidence from the resume supporting the score", str("Evidence")),
+    interview_focus: arr("Specific areas to probe in the interview", str("Interview focus")),
+    strengths: arr("Job-relevant strengths", str("Strength")),
+    gaps: arr("Job-relevant gaps or risks", str("Gap")),
+    next_step: str("Recommended next step for the recruiter (never a rejection)"),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  [
+    "candidate_name",
+    "job_title",
+    "overall_score",
+    "skill_match",
+    "experience_match",
+    "role_relevance",
+    "education_match",
+    "recommendation",
+    "summary",
+    "why_matches",
+    "missing_requirements",
+    "relevant_evidence",
+    "interview_focus",
+    "strengths",
+    "gaps",
+    "next_step",
+    "confidence",
+  ]
+);
+
+export const candidateComparisonSchema: Schema = obj(
+  "Short comparative read across candidates for the same role. Compare only on job-relevant skills, experience, and evidence — never protected characteristics. No candidate should be recommended for rejection.",
+  {
+    headline: str("One-line summary of how the candidates compare"),
+    recommended_candidate: str("Name of the strongest fit, or 'Mixed — review both' if it is close"),
+    candidate_notes: arr("Per-candidate one-liners", obj("Candidate note", {
+      candidate_name: str("Candidate full name"),
+      note: str("One-line observation about their fit"),
+    }, ["candidate_name", "note"])),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["headline", "recommended_candidate", "candidate_notes", "confidence"]
+);
+
 export const policyAnswerSchema: Schema = obj(
   "Answer to a policy question grounded in the provided policy text.",
   {
@@ -401,6 +609,90 @@ export const careerRecommendationsSchema: Schema = obj(
     confidence: num("Model confidence between 0 and 1"),
   },
   ["headline", "career_paths", "immediate_actions", "confidence"]
+);
+
+export const employeeBriefSchema: Schema = obj(
+  "Personal AI workforce briefing for an individual employee, grounded only in their own data.",
+  {
+    headline: str("One-line summary of this period's key focus"),
+    summary: str("2-3 sentence plain-language brief on where the employee stands"),
+    focus_areas: arr("Prioritized focus areas", obj("Focus area", {
+      area: str("Focus area name"),
+      why: str("Why this matters right now"),
+      action: str("Concrete action to move forward"),
+    }, ["area", "why", "action"])),
+    recommended_action: str("The single most valuable next step"),
+    insights: arr("Supporting insights (reuse the insight schema)", insightSchema),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["headline", "summary", "focus_areas", "recommended_action", "insights", "confidence"]
+);
+
+export const sharpenedGoalSchema: Schema = obj(
+  "A vague goal rewritten into a measurable, achievable goal with milestones.",
+  {
+    title: str("Rewritten, specific goal title"),
+    description: str("1-2 sentence description with a measurable outcome"),
+    success_criteria: arr("Concrete criteria that prove success", str("Criterion")),
+    kpis: arr("Measurable KPIs tied to the success criteria", str("KPI")),
+    milestones: arr("Milestones", obj("Milestone", {
+      label: str("Milestone label"),
+      weeks: integer("Weeks from now"),
+      progress: integer("Expected progress percentage at this milestone (0-100)"),
+    }, ["label", "weeks", "progress"])),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["title", "description", "success_criteria", "kpis", "milestones", "confidence"]
+);
+
+export const skillPlanSchema: Schema = obj(
+  "Personal skill development plan: gaps, priorities, courses and career paths.",
+  {
+    headline: str("One-line summary of the skills outlook"),
+    overall_coverage_pct: num("Overall coverage of critical skills (0-100)"),
+    recommendations: arr("Per-skill recommendations", obj("Recommendation", {
+      skill: str("Skill name"),
+      current_proficiency: num("Current proficiency (0-5)"),
+      target_proficiency: num("Target proficiency (0-5)"),
+      gap: strEnum("Gap size", ["none", "small", "medium", "large"]),
+      priority: strEnum("Priority", ["low", "medium", "high"]),
+      rationale: str("Why this skill matters for the employee"),
+      courses: arr("Courses that build this skill", str("Course")),
+      projects: arr("Practical projects to practice it", str("Project")),
+      career_paths: arr("Career paths this skill unlocks", str("Career path")),
+    }, ["skill", "current_proficiency", "target_proficiency", "gap", "priority", "rationale", "courses", "projects", "career_paths"])),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["headline", "overall_coverage_pct", "recommendations", "confidence"]
+);
+
+export const performanceCoachSchema: Schema = obj(
+  "Personal performance coaching: what to keep doing and what to improve, grounded in reviews and feedback.",
+  {
+    headline: str("One-line summary of the performance outlook"),
+    strengths: arr("Demonstrated strengths from reviews and feedback", str("Strength")),
+    improvement_focus: arr("Direct answer to 'what should I improve?', one item per focus", str("Improvement focus")),
+    recommended_actions: arr("Concrete actions tied to the improvement focus", str("Recommended action")),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["headline", "strengths", "improvement_focus", "recommended_actions", "confidence"]
+);
+
+export const learningPlanSchema: Schema = obj(
+  "Personalized learning recommendations tied to goals and skill gaps.",
+  {
+    headline: str("One-line summary of the learning plan"),
+    recommendations: arr("Recommended learning", obj("Recommendation", {
+      course_title: str("Course or learning resource title"),
+      provider: str("Provider or platform"),
+      duration_hours: num("Estimated duration in hours"),
+      reason: str("Why this is recommended for the employee"),
+      supports_goals: arr("Goals or skills it supports", str("Goal or skill")),
+      priority: strEnum("Priority", ["low", "medium", "high"]),
+    }, ["course_title", "provider", "duration_hours", "reason", "supports_goals", "priority"])),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["headline", "recommendations", "confidence"]
 );
 
 // ---------------------------------------------------------------------------
@@ -599,7 +891,7 @@ export function normalizeOnboardingPlan(raw: Record<string, unknown>): Onboardin
 }
 
 export function normalizeCandidateRanking(raw: Record<string, unknown>): CandidateRanking {
-  const stages: CandidateRanking["recommended_stage"][] = ["new", "screening", "interview", "offer", "reject"];
+  const stages: CandidateRanking["recommended_stage"][] = ["applied", "screening", "interview", "evaluation", "shortlisted", "hired", "rejected"];
   const stage = asString(raw.recommended_stage).toLowerCase();
   return {
     candidate_name: asString(raw.candidate_name),
@@ -697,6 +989,165 @@ export function normalizeCareerRecommendations(raw: Record<string, unknown>): Ca
       };
     }),
     immediate_actions: asStringArray(raw.immediate_actions),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizeResumeAnalysis(raw: Record<string, unknown>): ResumeAnalysis {
+  return {
+    full_name: asString(raw.full_name),
+    email: asString(raw.email).toLowerCase(),
+    phone: asString(raw.phone),
+    current_title: asString(raw.current_title),
+    location: asString(raw.location),
+    summary: asString(raw.summary),
+    years_of_experience: Math.round(clamp(asNumber(raw.years_of_experience), 0, 60) * 10) / 10,
+    education: asString(raw.education),
+    skills: asStringArray(raw.skills),
+    projects: asStringArray(raw.projects),
+    certifications: asStringArray(raw.certifications),
+    relevant_experience: asString(raw.relevant_experience),
+  };
+}
+
+const CANDIDATE_RECS: CandidateRecommendation[] = ["strong", "potential", "needs_assessment"];
+
+export function normalizeCandidateMatch(raw: Record<string, unknown>): CandidateMatch {
+  const rec = asString(raw.recommendation).toLowerCase();
+  return {
+    candidate_name: asString(raw.candidate_name),
+    job_title: asString(raw.job_title),
+    overall_match: clamp(Math.round(asNumber(raw.overall_score)), 0, 100),
+    skill_match: clamp(Math.round(asNumber(raw.skill_match)), 0, 100),
+    experience_match: clamp(Math.round(asNumber(raw.experience_match)), 0, 100),
+    role_relevance: clamp(Math.round(asNumber(raw.role_relevance)), 0, 100),
+    education_match: clamp(Math.round(asNumber(raw.education_match)), 0, 100),
+    recommendation: CANDIDATE_RECS.includes(rec as CandidateRecommendation)
+      ? (rec as CandidateRecommendation)
+      : "needs_assessment",
+    summary: asString(raw.summary),
+    why_matches: asStringArray(raw.why_matches),
+    missing_requirements: asStringArray(raw.missing_requirements),
+    relevant_evidence: asStringArray(raw.relevant_evidence),
+    interview_focus: asStringArray(raw.interview_focus),
+    strengths: asStringArray(raw.strengths),
+    gaps: asStringArray(raw.gaps),
+    next_step: asString(raw.next_step),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizeCandidateComparison(raw: Record<string, unknown>): CandidateComparison {
+  const notes = Array.isArray(raw.candidate_notes) ? raw.candidate_notes : [];
+  return {
+    headline: asString(raw.headline),
+    recommended_candidate: asString(raw.recommended_candidate),
+    candidate_notes: notes.map((n) => {
+      const row = (n ?? {}) as Record<string, unknown>;
+      return { candidate_name: asString(row.candidate_name), note: asString(row.note) };
+    }),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Employee workspace normalizers (sections 15-19)
+// ---------------------------------------------------------------------------
+
+export function normalizeEmployeeBrief(raw: Record<string, unknown>): EmployeeBrief {
+  const areas = Array.isArray(raw.focus_areas) ? raw.focus_areas : [];
+  return {
+    headline: asString(raw.headline),
+    summary: asString(raw.summary),
+    focus_areas: areas.map((a) => {
+      const row = (a ?? {}) as Record<string, unknown>;
+      return {
+        area: asString(row.area),
+        why: asString(row.why),
+        action: asString(row.action),
+      };
+    }),
+    recommended_action: asString(raw.recommended_action),
+    confidence: asConfidence(raw.confidence),
+    insights: normalizeInsights(raw.insights),
+  };
+}
+
+export function normalizeSharpenedGoal(raw: Record<string, unknown>): SharpenedGoal {
+  const milestones = Array.isArray(raw.milestones) ? raw.milestones : [];
+  return {
+    title: asString(raw.title),
+    description: asString(raw.description),
+    success_criteria: asStringArray(raw.success_criteria),
+    kpis: asStringArray(raw.kpis),
+    milestones: milestones.map((m) => {
+      const row = (m ?? {}) as Record<string, unknown>;
+      return {
+        label: asString(row.label),
+        weeks: Math.round(asNumber(row.weeks)),
+        progress: clamp(Math.round(asNumber(row.progress)), 0, 100),
+      };
+    }),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizeSkillPlan(raw: Record<string, unknown>): SkillPlan {
+  const recs = Array.isArray(raw.recommendations) ? raw.recommendations : [];
+  const gaps: SkillPlanRecommendation["gap"][] = ["none", "small", "medium", "large"];
+  return {
+    headline: asString(raw.headline),
+    overall_coverage_pct: Math.round(clamp(asNumber(raw.overall_coverage_pct), 0, 100) * 10) / 10,
+    recommendations: recs.map((r) => {
+      const row = (r ?? {}) as Record<string, unknown>;
+      const gap = asString(row.gap).toLowerCase();
+      return {
+        skill: asString(row.skill),
+        current_proficiency: Math.round(clamp(asNumber(row.current_proficiency), 0, 5) * 10) / 10,
+        target_proficiency: Math.round(clamp(asNumber(row.target_proficiency), 0, 5) * 10) / 10,
+        gap: gaps.includes(gap as SkillPlanRecommendation["gap"])
+          ? (gap as SkillPlanRecommendation["gap"])
+          : "medium",
+        priority: ["low", "medium", "high"].includes(asString(row.priority))
+          ? (asString(row.priority) as "low" | "medium" | "high")
+          : "medium",
+        rationale: asString(row.rationale),
+        courses: asStringArray(row.courses),
+        projects: asStringArray(row.projects),
+        career_paths: asStringArray(row.career_paths),
+      };
+    }),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizePerformanceCoach(raw: Record<string, unknown>): PerformanceCoach {
+  return {
+    headline: asString(raw.headline),
+    strengths: asStringArray(raw.strengths),
+    improvement_focus: asStringArray(raw.improvement_focus),
+    recommended_actions: asStringArray(raw.recommended_actions),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizeLearningPlan(raw: Record<string, unknown>): LearningPlan {
+  const recs = Array.isArray(raw.recommendations) ? raw.recommendations : [];
+  return {
+    headline: asString(raw.headline),
+    recommendations: recs.map((r) => {
+      const row = (r ?? {}) as Record<string, unknown>;
+      return {
+        course_title: asString(row.course_title),
+        provider: asString(row.provider),
+        duration_hours: Math.round(asNumber(row.duration_hours) * 10) / 10,
+        reason: asString(row.reason),
+        supports_goals: asStringArray(row.supports_goals),
+        priority: ["low", "medium", "high"].includes(asString(row.priority))
+          ? (asString(row.priority) as "low" | "medium" | "high")
+          : "medium",
+      };
+    }),
     confidence: asConfidence(raw.confidence),
   };
 }

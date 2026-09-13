@@ -48,6 +48,7 @@ const pick = (arr) => arr[Math.floor(rand() * arr.length)];
 const randInt = (min, max) => Math.floor(rand() * (max - min + 1)) + min;
 const randFloat = (min, max) => rand() * (max - min) + min;
 const chance = (p) => rand() < p;
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
 const iso = (d) => d.toISOString().slice(0, 10);
 
@@ -671,53 +672,257 @@ function buildRiskScores(specs) {
   return rows;
 }
 
+const REQUIREMENT_SETS = {
+  "Frontend Engineer": { required: "TypeScript, React, Next.js", preferred: "Supabase, GraphQL, Design Systems, Accessibility", experience: "2+ years", education: "Bachelor's in CS or equivalent", seniority: "Mid-level" },
+  "Backend Engineer": { required: "Node.js, PostgreSQL, REST APIs", preferred: "Go, GraphQL, Redis, Serverless", experience: "2+ years", education: "Bachelor's in CS or equivalent", seniority: "Mid-level" },
+  "Senior Backend Engineer": { required: "Node.js, PostgreSQL, Cloud Architecture, Microservices", preferred: "Go, Kubernetes, Redis, Performance Tuning", experience: "5+ years", education: "Bachelor's in CS or equivalent", seniority: "Senior" },
+  "DevOps Engineer": { required: "AWS, Docker, Kubernetes, CI/CD", preferred: "Terraform, Observability, Security Compliance", experience: "3+ years", education: "Bachelor's or equivalent experience", seniority: "Mid-level" },
+  "QA Engineer": { required: "QA Automation, Test Planning, TypeScript", preferred: "Load Testing, CI/CD, Accessibility", experience: "2+ years", education: "Any degree or equivalent experience", seniority: "Mid-level" },
+  "Product Manager": { required: "Product Strategy, Stakeholder Management, Agile Delivery", preferred: "Data Analysis, A/B Testing, OKR Setting", experience: "4+ years", education: "Bachelor's or MBA", seniority: "Senior" },
+  "Data Analyst": { required: "SQL, Data Visualization, Data Analysis", preferred: "Tableau, Statistical Analysis, Python", experience: "2+ years", education: "Bachelor's in a quantitative field", seniority: "Mid-level" },
+  "Account Executive": { required: "Sales Negotiation, Account Management", preferred: "CRM Administration, Forecasting", experience: "3+ years", education: "Any degree", seniority: "Mid-level" },
+  "Sales Development Rep": { required: "Lead Generation, Communication", preferred: "CRM Administration", experience: "1+ year", education: "Any degree", seniority: "Entry level" },
+  "Marketing Specialist": { required: "Content Strategy, SEO, Email Marketing", preferred: "Paid Media, Brand Management, Data Analysis", experience: "2+ years", education: "Bachelor's in Marketing or equivalent", seniority: "Mid-level" },
+  "Customer Success Manager": { required: "Customer Success, Renewal Management, Communication", preferred: "CRM Administration, Data Analysis", experience: "3+ years", education: "Any degree", seniority: "Mid-level" },
+  "Support Engineer": { required: "Troubleshooting, Communication, REST APIs", preferred: "Linux Administration, Elasticsearch, Networking", experience: "1+ year", education: "Any degree or equivalent experience", seniority: "Entry level" },
+};
+
+const JOBS = [
+  ["Frontend Engineer", "ENG-SW", "full_time"],
+  ["Backend Engineer", "ENG-SW", "full_time"],
+  ["Senior Backend Engineer", "ENG-SSR", "full_time"],
+  ["DevOps Engineer", "ENG-DEVOPS", "full_time"],
+  ["QA Engineer", "ENG-QA", "full_time"],
+  ["Product Manager", "PDT-PM", "full_time"],
+  ["Data Analyst", "PDT-DA", "full_time"],
+  ["Account Executive", "SAL-AE", "full_time"],
+  ["Sales Development Rep", "SAL-SDR", "full_time"],
+  ["Marketing Specialist", "MKT-SPC", "full_time"],
+  ["Customer Success Manager", "SUP-CSM", "full_time"],
+  ["Support Engineer", "SUP-SE", "contract"],
+];
+
+const CANDIDATE_STATUSES = [
+  "applied", "applied", "applied",
+  "screening", "screening",
+  "interview", "interview",
+  "evaluation",
+  "shortlisted",
+  "hired", "hired",
+  "rejected", "withdrawn",
+];
+
+const CANDIDATE_TITLES = [
+  "Frontend Developer", "Full-Stack Developer", "Platform Engineer", "DevOps Engineer", "QA Engineer",
+  "Product Manager", "Data Analyst", "Account Executive", "Sales Development Representative",
+  "Marketing Specialist", "Customer Success Manager", "Technical Support Engineer",
+];
+const CANDIDATE_SUMMARIES = [
+  "Software engineer with a product mindset and a track record of shipping reliable, well-tested features.",
+  "Cross-functional operator who turns ambiguous requirements into measurable deliverables.",
+  "Hands-on specialist with strong analytical skills and clear written communication.",
+  "Customer-focused professional experienced in owning relationships and driving renewals.",
+  "Builder who values clean architecture, observability, and pragmatic trade-offs.",
+];
+const EDUCATION_SAMPLES = [
+  "Bachelor's in Computer Science", "Bachelor's in Business Administration", "Master's in Data Science",
+  "Associate's degree", "High school diploma", "Bachelor's in Design",
+];
+const PROJECT_SAMPLES = [
+  "Rebuilt the checkout flow, lifting conversion by 12% while cutting page load time in half.",
+  "Migrated a legacy monolith to a containerised service behind a reverse proxy.",
+  "Introduced a weekly reporting cadence that gave leadership a single source of truth.",
+  "Automated a manual onboarding process, saving around 8 hours per week of team time.",
+];
+const CERT_SAMPLES = [
+  "AWS Certified Cloud Practitioner",
+  "Certified Kubernetes Application Developer",
+  "Tableau Desktop Specialist",
+  "Professional Scrum Master I",
+  "None",
+];
+
 function buildRecruitment(roleDept, hiringManagerEmpId) {
-  const jobs = [
-    ["Frontend Engineer", "ENG-SW", "full_time"],
-    ["Backend Engineer", "ENG-SW", "full_time"],
-    ["Senior Backend Engineer", "ENG-SSR", "full_time"],
-    ["DevOps Engineer", "ENG-DEVOPS", "full_time"],
-    ["QA Engineer", "ENG-QA", "full_time"],
-    ["Product Manager", "PDT-PM", "full_time"],
-    ["Data Analyst", "PDT-DA", "full_time"],
-    ["Account Executive", "SAL-AE", "full_time"],
-    ["Sales Development Rep", "SAL-SDR", "full_time"],
-    ["Marketing Specialist", "MKT-SPC", "full_time"],
-    ["Customer Success Manager", "SUP-CSM", "full_time"],
-    ["Support Engineer", "SUP-SE", "contract"],
-  ];
-  return jobs.map(([title, roleCode, type]) => ({
-    id: hashId("job:" + title),
-    title,
-    department_id: roleDept[roleCode] ?? null,
-    hiring_manager_id: hiringManagerEmpId,
-    status: "published",
-    employment_type: type,
-    location: pick(CITIES),
-    headcount: randInt(1, 3),
-    salary_band: "range-negotiable",
-    description: `Open position for ${title}.`,
-    requirements: "Relevant experience and team fit.",
-  }));
+  return JOBS.map(([title, roleCode, type]) => {
+    const req = REQUIREMENT_SETS[title] ?? {};
+    return {
+      id: hashId("job:" + title),
+      title,
+      department_id: roleDept[roleCode] ?? null,
+      hiring_manager_id: hiringManagerEmpId,
+      status: "published",
+      employment_type: type,
+      location: pick(CITIES),
+      headcount: randInt(1, 3),
+      salary_band: "range-negotiable",
+      description: `Open position for ${title}${req.experience ? `. Looking for ${req.experience} of experience and ${req.education}.` : ""}`,
+      requirements: "Relevant experience and team fit.",
+      required_skills: req.required ?? null,
+      preferred_skills: req.preferred ?? null,
+      experience: req.experience ?? null,
+      education: req.education ?? null,
+      seniority: req.seniority ?? null,
+    };
+  });
 }
 
 function buildCandidates(allJobs) {
   const candidates = [];
-  const statuses = ["new", "new", "new", "screening", "screening", "interview", "interview", "offer", "hired", "rejected"];
   for (let i = 0; i < 60; i++) {
     const email = `candidate${i}@example.com`;
+    const job = pick(allJobs);
+    const skillCount = randInt(6, 12);
+    const skillNames = new Set();
+    let safety = 0;
+    while (skillNames.size < skillCount && safety < 40) {
+      safety++;
+      skillNames.add(pick(SKILL_NAMES));
+    }
     candidates.push({
       id: hashId("cand:" + email),
-      job_id: pick(allJobs).id,
+      job_id: job.id,
       full_name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`,
       email,
-      status: pick(statuses),
+      status: pick(CANDIDATE_STATUSES),
       source: pick(["LinkedIn", "Referral", "Indeed", "Career site"]),
       applied_at: iso(new Date(new Date().setDate(new Date().getDate() - randInt(2, 120)))),
       notes: null,
+      current_title: pick(CANDIDATE_TITLES),
+      summary: pick(CANDIDATE_SUMMARIES),
+      experience_years: Math.round(randFloat(0.5, 15) * 10) / 10,
+      education: pick(EDUCATION_SAMPLES),
+      projects: pick(PROJECT_SAMPLES),
+      certifications: pick(CERT_SAMPLES),
+      relevant_experience: `Worked on ${job.title.replace(/ Engineer\b/, "").toLowerCase()} deliverables for the past ${randInt(1, 4)} years.`,
+      hasResume: chance(0.7),
+      skill_names: [...skillNames],
+      required_skills: (REQUIREMENT_SETS[job.title]?.required ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     });
   }
   return candidates;
+}
+
+function buildCandidateSkills(candidates, skillId) {
+  const rows = [];
+  for (const c of candidates) {
+    for (const name of c.skill_names) {
+      if (!skillId[name]) continue;
+      rows.push({
+        id: hashId("candskill:" + c.id + ":" + name),
+        candidate_id: c.id,
+        skill_id: skillId[name],
+      });
+    }
+  }
+  return rows;
+}
+
+function resumeTextFor(c) {
+  return [
+    `${c.full_name}`,
+    c.current_title,
+    "",
+    "Summary",
+    c.summary,
+    "",
+    "Skills",
+    c.skill_names.join(", "),
+    "",
+    "Experience",
+    `${c.relevant_experience} Total experience ~${Math.round(c.experience_years)} years.`,
+    "",
+    "Education",
+    c.education,
+    "",
+    "Projects",
+    c.projects,
+    "",
+    "Certifications",
+    c.certifications,
+  ].join("\n");
+}
+
+function buildResumes(candidates) {
+  const rows = [];
+  for (const c of candidates) {
+    if (!c.hasResume) continue;
+    rows.push({
+      id: hashId("resume:" + c.id),
+      candidate_id: c.id,
+      file_path: `candidate/${c.id}/seed_resume.txt`,
+      file_name: `${c.full_name.replace(/\s+/g, "_")}_resume.txt`,
+      file_type: "text/plain",
+      file_size: resumeTextFor(c).length,
+      content_text: resumeTextFor(c),
+    });
+  }
+  return rows;
+}
+
+const pickMissing = (c) => {
+  const pool = (c.required_skills ?? []).filter((s) => !c.skill_names.includes(s));
+  return pool.length > 0 ? pool : [];
+};
+
+function buildAssessments(candidates) {
+  const rows = [];
+  for (const c of candidates) {
+    if (!c.hasResume) continue;
+    if (c.status === "applied" && !chance(0.35)) continue;
+
+    const skillMatch = clamp(Math.round(randFloat(42, 96)), 0, 100);
+    const experienceMatch = clamp(Math.round(randFloat(40, 95)), 0, 100);
+    const roleRelevance = clamp(Math.round(randFloat(45, 98)), 0, 100);
+    const educationMatch = clamp(Math.round(randFloat(55, 100)), 0, 100);
+    const overall = clamp(
+      Math.round(skillMatch * 0.4 + experienceMatch * 0.25 + roleRelevance * 0.2 + educationMatch * 0.15),
+      0,
+      100
+    );
+    const recommendation = overall >= 80 ? "strong" : overall >= 55 ? "potential" : "needs_assessment";
+
+    const topSkill = c.skill_names[0] ?? "communication";
+    const secondSkill = c.skill_names[1] ?? "collaboration";
+    const strengths = [
+      `Solid ${topSkill} experience that maps directly to the role.`,
+      `Strong track record of ${secondSkill} in a team setting.`,
+    ];
+    const gaps = pickMissing(c).map((s) => `No direct evidence of ${s} on the latest resume.`);
+    if (gaps.length === 0) gaps.push("No major requirement gaps identified on the resume.");
+    const focus = [
+      `Probe depth of ${topSkill} with a concrete scenario.`,
+      `Validate ${experienceMatch >= 70 ? "ownership" : "learning"} framing from ${c.relevant_experience}`,
+    ];
+
+    rows.push({
+      id: hashId("assessment:" + c.id + ":" + c.job_id),
+      candidate_id: c.id,
+      job_id: c.job_id,
+      overall_match: overall,
+      skill_match: skillMatch,
+      experience_match: experienceMatch,
+      role_relevance: roleRelevance,
+      education_match: educationMatch,
+      recommendation,
+      summary: `${c.full_name} shows a ${recommendation === "strong" ? "strong" : recommendation === "potential" ? "promising but partial" : "limited, to-be-validated"} fit for the role based on resume evidence.`,
+      why_matches: [
+        `Relevant experience in ${c.current_title} with ${Math.round(c.experience_years)} years in total.`,
+        `Lists ${c.skill_names.length} skills, led by ${topSkill}.`,
+      ],
+      missing_requirements: gaps,
+      relevant_evidence: [c.relevant_experience],
+      interview_focus: focus,
+      strengths,
+      gaps,
+      next_step: recommendation === "strong" ? "Move to interview." : "Screen with a short call before deciding next steps.",
+      confidence: Math.round(randFloat(0.7, 0.95) * 1000) / 1000,
+      updated_at: iso(new Date(new Date().setDate(new Date().getDate() - randInt(1, 14)))),
+    });
+  }
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -811,11 +1016,16 @@ async function main() {
   console.log("[11] Risk scores");
   await runUpsert("risk_scores", buildRiskScores(withProfiles), "id");
 
-  console.log("[12] Jobs + candidates");
+  console.log("[12] Jobs + candidates + assessments");
   const jobs = buildRecruitment(roleDept, empIdByCode["EMP-ENG-0001"] ?? null);
   const { data: jobsOut, error: jobsErr } = await supabase.from("jobs").upsert(jobs, { onConflict: "id" }).select("id");
   if (jobsErr) throw new Error(`jobs: ${jobsErr.message}`);
-  await runUpsert("candidates", buildCandidates(jobsOut ?? []), "id");
+
+  const candidates = buildCandidates(jobsOut ?? []);
+  await runUpsert("candidates", candidates, "id");
+  await runUpsert("candidate_skills", buildCandidateSkills(candidates, skillId), "id");
+  await runUpsert("resumes", buildResumes(candidates), "id");
+  await runUpsert("candidate_assessments", buildAssessments(candidates), "id");
 
   console.log("[13] AI insights (org-wide)");
   await runUpsert(
