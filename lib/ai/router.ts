@@ -61,7 +61,7 @@ const ALL_PROVIDERS: AiProvider[] = [
 
 const DEFAULT_ORDER: RuntimeProviderId[] = ["gemini", "openrouter", "groq", "mistral"];
 
-const COOLDOWN_MS = Math.max(0, Number(process.env.AI_PROVIDER_COOLDOWN_MS ?? 15_000) || 15_000);
+const COOLDOWN_MS = Math.max(0, Number(process.env.AI_PROVIDER_COOLDOWN_MS ?? 5_000) || 5_000);
 
 // Outage-class codes put the provider on cooldown. Per-attempt codes like
 // invalid_response do not (they are specific to one bad response).

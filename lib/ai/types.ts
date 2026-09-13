@@ -38,7 +38,7 @@ export interface GenerateStructuredOptions {
   schema?: Schema;
   /** Sampling temperature. Lower = more deterministic. Defaults to 0.3. */
   temperature?: number;
-  /** Per-request timeout in milliseconds. Defaults to 45_000. */
+  /** Per-request timeout in milliseconds. Defaults to 25_000. */
   timeoutMs?: number;
   /**
    * When true (default) and the provider rejects the JSON-mode/schema

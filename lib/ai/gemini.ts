@@ -125,7 +125,7 @@ async function requestModel(
     },
   });
   return model.generateContent(options.prompt, {
-    timeout: options.timeoutMs ?? 45_000,
+    timeout: options.timeoutMs ?? 25_000,
   });
 }
 

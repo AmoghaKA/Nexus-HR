@@ -84,7 +84,7 @@ async function chatCompletion(
   jsonMode: boolean
 ): Promise<string> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 45_000);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 25_000);
 
   try {
     const body: Record<string, unknown> = {
