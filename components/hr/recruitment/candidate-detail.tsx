@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
-import { Award, BarChart3, CalendarDays, FileText, GraduationCap, Loader2, Mail, Phone, Sparkles, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Award, BarChart3, CalendarDays, ClipboardList, FileText, GraduationCap, Loader2, Mail, Phone, Plus, Sparkles, User } from "lucide-react";
 
-import type { RecruitmentCandidate } from "@/lib/hr/recruitment";
+import type { CandidateInterview, RecruitmentCandidate } from "@/lib/hr/recruitment";
 import { updateCandidateStatus } from "@/lib/recruitment/actions";
-import { analyzeResume, matchCandidate, type AnalyzeResumeActionResult, type MatchCandidateActionResult } from "@/lib/ai/actions";
+import { analyzeResume, generateInterviewInsight, matchCandidate, type AnalyzeResumeActionResult, type GenerateInterviewInsightActionResult, type MatchCandidateActionResult } from "@/lib/ai/actions";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,8 @@ import {
   ScoreBar,
 } from "@/components/hr/ai-shared";
 import { MatchBadge, RecommendationBadge, STAGE_META } from "@/components/hr/recruitment/recruitment-ui";
+import { ScheduleInterviewDialog } from "@/components/hr/recruitment/schedule-interview-dialog";
+import { RecordEvaluationDialog } from "@/components/hr/recruitment/record-evaluation-dialog";
 
 interface CandidateDetailProps {
   candidate: RecruitmentCandidate;
@@ -61,12 +63,83 @@ function Panel({ icon, title, children }: { icon: React.ReactNode; title: string
   );
 }
 
+const INTERVIEW_STATUS_META: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "success" | "warning" | "danger" }> = {
+  scheduled: { label: "Scheduled", variant: "warning" },
+  completed: { label: "Completed", variant: "success" },
+  cancelled: { label: "Cancelled", variant: "secondary" },
+  no_show: { label: "No-show", variant: "danger" },
+};
+
+function InsightCard({ insight }: { insight: NonNullable<CandidateInterview["ai_insight"]> }) {
+  const dims = [
+    { key: "Technical competency", value: insight.technical_competency },
+    { key: "Communication", value: insight.communication },
+    { key: "Problem solving", value: insight.problem_solving },
+    { key: "Role fit", value: insight.role_fit },
+  ] as const;
+  return (
+    <div className="space-y-3 rounded-lg border border-primary/20 bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="border-primary/40">
+          <Sparkles className="mr-1 h-3 w-3" aria-hidden="true" />
+          AI-generated interview insight
+        </Badge>
+        <ConfidenceBadge confidence={insight.confidence} />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Advisory only — AI never decides. HR reviews this summary and makes the final call.
+      </p>
+      <p className="text-sm font-medium text-card-foreground">{insight.headline}</p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Overall impression</span>
+            <span className="font-semibold">{insight.overall_score}/100</span>
+          </div>
+          <ScoreBar
+            value={insight.overall_score}
+            tone={insight.overall_score >= 70 ? "success" : insight.overall_score >= 50 ? "warning" : "destructive"}
+          />
+        </div>
+        {dims.map((d) => (
+          <div key={d.key} className="rounded-md bg-card p-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{d.key}</p>
+              <Badge variant="secondary">{d.value.rating}/5</Badge>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-card-foreground">{d.value.note}</p>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Strengths</p>
+        <BulletList items={insight.strengths} tone="primary" />
+      </div>
+      <div>
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Concerns</p>
+        <BulletList items={insight.concerns} tone="muted" empty="None flagged." />
+      </div>
+      <div>
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Evidence</p>
+        <BulletList items={insight.evidence} tone="muted" empty="No evidence recorded yet." />
+      </div>
+      <AiDisclaimer />
+    </div>
+  );
+}
+
 export function CandidateDetail({ candidate, open, onOpenChange, onChanged }: CandidateDetailProps) {
   const analyze = useAiRun<AnalyzeResumeActionResult>();
   const match = useAiRun<MatchCandidateActionResult>();
+  const insight = useAiRun<GenerateInterviewInsightActionResult>();
   const [stage, setStage] = useState(candidate.status);
   const [stageBusy, setStageBusy] = useState(false);
   const [stageError, setStageError] = useState<string | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [recording, setRecording] = useState<CandidateInterview | null>(null);
+  const [insightForId, setInsightForId] = useState<string | null>(null);
 
   const assessment = candidate.assessment;
 
@@ -83,6 +156,19 @@ export function CandidateDetail({ candidate, open, onOpenChange, onChanged }: Ca
     }
     onChanged();
   }
+
+  async function runInsight(interviewId: string) {
+    setInsightForId(interviewId);
+    insight.run(() => generateInterviewInsight(interviewId));
+  }
+
+  const refreshedInsightId = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (insight.result?.ok && insightForId && refreshedInsightId.current !== insightForId) {
+      refreshedInsightId.current = insightForId;
+      onChanged();
+    }
+  }, [insight.result, insightForId, onChanged]);
 
   const isBusy = analyze.isPending || match.isPending;
   const isNewAnalysis = analyze.isPending && !analyze.result;
@@ -266,8 +352,156 @@ export function CandidateDetail({ candidate, open, onOpenChange, onChanged }: Ca
               <span className="font-medium text-card-foreground">Score match</span> to see this candidate&apos;s evidence-based fit.
             </p>
           )}
+
+          <div className="space-y-3 rounded-lg border bg-card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
+                Interviews
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!candidate.job_id}
+                onClick={() => setScheduleOpen(true)}
+                title={candidate.job_id ? "Create an interview with the role's AI question set" : "Assign a job to the candidate first"}
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                Schedule interview
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Pipeline stage is the HR decision — the AI interview insight below is advisory only.
+            </p>
+
+            {candidate.interviews.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No interviews yet. Schedule one to attach the role&apos;s question set and collect evaluations.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {candidate.interviews.map((int) => {
+                  const meta = INTERVIEW_STATUS_META[int.status] ?? { label: int.status, variant: "secondary" as const };
+                  const records = int.evaluation_records;
+                  const showInsight = insightForId === int.id;
+                  return (
+                    <li key={int.id} className="space-y-2 rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={meta.variant}>{meta.label}</Badge>
+                        <span className="text-xs capitalize text-muted-foreground">{int.interview_type ?? "Interview"}</span>
+                        {int.scheduled_at && (
+                          <span className="text-xs text-muted-foreground">{new Date(int.scheduled_at).toLocaleString()}</span>
+                        )}
+                        {int.interviewer_name && <span className="text-xs text-muted-foreground">· {int.interviewer_name}</span>}
+                        <span className="ml-auto text-[11px] text-muted-foreground">
+                          {int.questions.length} questions · {records.length} evaluated
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={int.status === "cancelled" || int.status === "no_show"}
+                          onClick={() => setRecording(int)}
+                        >
+                          <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
+                          Record evaluation
+                        </Button>
+                        {records.length > 0 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={insight.isPending && showInsight}
+                            onClick={() => runInsight(int.id)}
+                          >
+                            {insight.isPending && showInsight ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-3.5 w-3.5" />
+                            )}
+                            {int.ai_insight ? "Regenerate insight" : "Generate insight"}
+                          </Button>
+                        )}
+                      </div>
+
+                      {showInsight && insight.isPending && <LoadingRow label="Analyzing the recorded responses…" />}
+                      {showInsight && insight.result && !insight.result.ok && (
+                        <ErrorBanner error={insight.result.error ?? "Failed to generate the insight."} />
+                      )}
+
+                      <div className="space-y-2">
+                        {int.questions.length > 0 && (
+                          <details>
+                            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                              Review {int.questions.length} interview questions
+                            </summary>
+                            <ul className="mt-2 space-y-1.5">
+                              {int.questions.map((q, i) => (
+                                <li key={q.id} className="text-sm leading-relaxed">
+                                  <span className="text-muted-foreground">{i + 1}.</span> {q.question}
+                                  {q.title && <span className="ml-1 text-[11px] text-muted-foreground">({q.title})</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                        {records.length > 0 && (
+                          <details>
+                            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                              Review {records.length} recorded responses
+                            </summary>
+                            <ul className="mt-2 space-y-2">
+                              {records.map((r) => (
+                                <li key={r.id} className="rounded-md bg-muted/40 p-2">
+                                  <p className="text-sm font-medium">{r.question}</p>
+                                  {r.candidate_response && (
+                                    <p className="mt-1 text-sm leading-relaxed text-card-foreground">{r.candidate_response}</p>
+                                  )}
+                                  <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                                    <Badge variant="secondary">{r.rating != null ? `${r.rating}/5` : "No rating"}</Badge>
+                                    {r.notes && <span>{r.notes}</span>}
+                                    {r.interviewer_name && <span>· {r.interviewer_name}</span>}
+                                  </p>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </div>
+
+                      {(() => {
+                      const live = showInsight && insight.result?.ok ? insight.result.insight : null;
+                      const card = int.ai_insight ?? live;
+                      return card ? <InsightCard insight={card} /> : null;
+                    })()}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
       </DialogContent>
+
+      <ScheduleInterviewDialog
+        candidate={candidate}
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        onCreated={onChanged}
+      />
+      {recording && (
+        <RecordEvaluationDialog
+          interview={recording}
+          candidateName={candidate.full_name}
+          open
+          onOpenChange={(next) => {
+            if (!next) setRecording(null);
+          }}
+          onSaved={onChanged}
+        />
+      )}
     </Dialog>
   );
 }

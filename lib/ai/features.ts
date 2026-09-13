@@ -13,6 +13,7 @@ import {
   employeeBriefSchema,
   insightsWrapperSchema,
   interviewEvaluationSchema,
+  interviewInsightSchema,
   interviewQuestionsSchema,
   learningPlanSchema,
   onboardingPlanSchema,
@@ -34,6 +35,7 @@ import {
   type EmployeeBrief,
   type GeminiInsight,
   type InterviewEvaluation,
+  type InterviewInsight,
   type InterviewQuestions,
   type LearningPlan,
   type OnboardingPlan,
@@ -55,6 +57,7 @@ import {
   normalizeEmployeeBrief,
   normalizeInsights,
   normalizeInterviewEvaluation,
+  normalizeInterviewInsight,
   normalizeInterviewQuestions,
   normalizeLearningPlan,
   normalizeOnboardingPlan,
@@ -1575,34 +1578,60 @@ export async function rankCandidate(candidateId: string): Promise<RankCandidateR
 // 8. Interview Questions
 // ---------------------------------------------------------------------------
 
+export interface InterviewSetupOptions {
+  interviewType: "technical" | "behavioral" | "mixed";
+  seniority?: string | null;
+  requiredSkills?: string[];
+}
+
 export interface GenerateInterviewQuestionsResult {
   questions: InterviewQuestions;
 }
 
-export async function generateInterviewQuestions(jobId: string): Promise<GenerateInterviewQuestionsResult> {
+export async function generateInterviewQuestions(jobId: string, options?: InterviewSetupOptions): Promise<GenerateInterviewQuestionsResult> {
   const supabase = requireSupabase();
 
   const jobRes = await supabase
     .from("jobs")
-    .select("title, departments(name), requirements, description")
+    .select("title, seniority, required_skills, departments(name), requirements, description")
     .eq("id", jobId)
     .maybeSingle();
   checkQuery("job", jobRes);
   const job = jobRes.data as unknown as {
     title: string | null;
+    seniority: string | null;
+    required_skills: string | null;
     departments: { name: string } | null;
     requirements: string | null;
     description: string | null;
   };
   if (!job) throw new Error("Job not found.");
 
+  const seniority = options?.seniority ?? job.seniority ?? "not specified";
+  const requiredSkills = options?.requiredSkills?.length
+    ? options.requiredSkills
+    : (job.required_skills ?? "")
+        .split(/[,;\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+  const styleLabel = options?.interviewType === "technical"
+    ? "technical depth first"
+    : options?.interviewType === "behavioral"
+      ? "behavior and judgement first"
+      : "balanced technical + behavioral";
+
   const prompt = [
     `Create an interview question set for: ${job.title ?? "Role"} (${job.departments?.name ?? "Unassigned"}).`,
+    `Seniority: ${seniority}`,
+    `Required skills: ${requiredSkills.length > 0 ? requiredSkills.join(", ") : "—"}`,
     `Requirements: ${job.requirements ?? "—"}`,
     `Description: ${job.description ?? "—"}`,
+    `Question-set style: ${styleLabel}.`,
     "",
     "Return the interview questions JSON (headline, sections with focus_area/rationale/questions(question, skill_assessed, follow_ups), confidence).",
-    "Cover technical/skills, behavior, and fit. Questions must be job-relevant and must not ask about protected characteristics.",
+    "Use exactly three sections titled 'Technical', 'Behavioral' and 'Scenario'.",
+    "Each question must include 2-3 follow-up probes so the interview can dig into the candidate's reasoning.",
+    "Questions must be specific to this role and seniority level, and must not ask about protected characteristics.",
   ].join("\n");
 
   const parsed = await generateStructuredJSON<Record<string, unknown>>({
@@ -1671,6 +1700,69 @@ export async function evaluateInterview(interviewId: string): Promise<EvaluateIn
   });
 
   return { evaluation: normalizeInterviewEvaluation(parsed) };
+}
+
+export interface GenerateInterviewInsightResult {
+  insight: InterviewInsight;
+}
+
+export async function generateInterviewInsight(interviewId: string): Promise<GenerateInterviewInsightResult> {
+  const supabase = requireSupabase();
+
+  const [intRes, qRes, detRes] = await Promise.all([
+    supabase.from("interviews").select("id, status, interview_type, jobs(title), candidates(full_name)").eq("id", interviewId).maybeSingle(),
+    supabase.from("interview_questions").select("question, order_index").eq("interview_id", interviewId).order("order_index", { ascending: true }),
+    supabase.from("interview_evaluation_rows").select("question, candidate_response, rating, notes").eq("interview_id", interviewId).order("created_at", { ascending: true }),
+  ]);
+  checkQuery("interview", intRes);
+  checkQuery("interview_questions", qRes);
+  checkQuery("interview_evaluation_rows", detRes);
+
+  const interview = intRes.data as unknown as {
+    id: string;
+    status: string;
+    interview_type: string | null;
+    jobs: { title: string } | null;
+    candidates: { full_name: string } | null;
+  };
+  if (!interview) throw new Error("Interview not found.");
+
+  const questions = (qRes.data ?? []) as { question: string; order_index: number }[];
+  const records = (detRes.data ?? []) as {
+    question: string;
+    candidate_response: string | null;
+    rating: number | null;
+    notes: string | null;
+  }[];
+
+  if (records.length === 0) {
+    throw new Error("No evaluation records for this interview yet. Record responses and ratings first.");
+  }
+
+  const prompt = [
+    `Review the interview records for ${interview.candidates?.full_name ?? "the candidate"} (role: ${interview.jobs?.title ?? "n/a"}, type: ${interview.interview_type ?? "n/a"}).`,
+    "",
+    `Questions asked: ${questions.map((q) => q.question).join(" | ") || "none recorded"}`,
+    "",
+    "Per-question records (question, candidate response, rating 1-5, notes):",
+    records.map((r) => `Q: ${r.question}\nResponse: ${r.candidate_response ?? "—"}\nRating: ${r.rating ?? "—"}/5\nNotes: ${r.notes ?? "—"}`).join("\n\n"),
+    "",
+    "Return the advisory interview insight JSON (headline, overall_score 0-100, technical_competency/communication/problem_solving/role_fit each with rating 1-5 and a short note, strengths, concerns, evidence, confidence).",
+    "Assess only the recorded responses. This is AI-generated interview insight to inform HR — it is an aid, NOT a hiring decision, and no output should read as HR's final call.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: interviewInsightSchema,
+    temperature: 0.2,
+  });
+
+  const insight = normalizeInterviewInsight(parsed);
+  const persistRes = await supabase.from("interviews").update({ ai_insight: insight }).eq("id", interviewId);
+  checkQuery("interview insight", persistRes);
+
+  return { insight };
 }
 
 // ---------------------------------------------------------------------------

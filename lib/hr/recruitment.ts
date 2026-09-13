@@ -1,4 +1,6 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { normalizeInterviewQuestions } from "@/lib/ai/schemas";
+import type { InterviewInsight, InterviewQuestions } from "@/lib/ai/schemas";
 
 // ---------------------------------------------------------------------------
 // Recruitment data contracts (server-side fetchers consumed by the page, and
@@ -56,7 +58,35 @@ export interface RecruitmentJob {
   experience: string | null;
   education: string | null;
   seniority: string | null;
+  question_set: InterviewQuestions | null;
   candidate_count: number;
+}
+
+export interface InterviewQuestionRow {
+  id: string;
+  title: string | null;
+  question: string;
+  order_index: number;
+}
+
+export interface InterviewEvaluationRecord {
+  id: string;
+  question: string;
+  candidate_response: string | null;
+  rating: number | null;
+  notes: string | null;
+  interviewer_name: string | null;
+}
+
+export interface CandidateInterview {
+  id: string;
+  status: string;
+  interview_type: string | null;
+  scheduled_at: string | null;
+  interviewer_name: string | null;
+  questions: InterviewQuestionRow[];
+  evaluation_records: InterviewEvaluationRecord[];
+  ai_insight: InterviewInsight | null;
 }
 
 export interface RecruitmentCandidate {
@@ -81,6 +111,8 @@ export interface RecruitmentCandidate {
   has_resume: boolean;
   resume_file_name: string | null;
   assessment: AssessmentRow | null;
+  question_set: InterviewQuestions | null;
+  interviews: CandidateInterview[];
 }
 
 export interface RecruitableDepartment {
@@ -152,6 +184,7 @@ interface JobRowRaw {
   experience: string | null;
   education: string | null;
   seniority: string | null;
+  interview_question_set: unknown;
   departments: { name: string } | null;
   candidates: { id: string }[] | null;
   candidate_count: number | null;
@@ -179,6 +212,69 @@ interface CandidateRowRaw {
   resumes: { file_name: string | null }[] | null;
 }
 
+interface InterviewRowRaw {
+  id: string;
+  candidate_id: string;
+  interview_type: string | null;
+  status: string;
+  scheduled_at: string | null;
+  ai_insight: unknown;
+  employees: { profiles: { full_name: string } | null } | null;
+}
+
+interface InterviewQuestionRowRaw {
+  id: string;
+  interview_id: string;
+  title: string | null;
+  question: string;
+  order_index: number;
+}
+
+interface EvaluationRowRaw {
+  id: string;
+  interview_id: string;
+  question: string;
+  candidate_response: string | null;
+  rating: number | null;
+  notes: string | null;
+  employees: { profiles: { full_name: string } | null } | null;
+}
+
+function toInterviewInsight(value: unknown): InterviewInsight | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.headline !== "string" || typeof v.overall_score !== "number") return null;
+
+  const dimension = (key: string): { rating: number; note: string } => {
+    const d = ((v[key] ?? {}) as Record<string, unknown>);
+    return {
+      rating: typeof d.rating === "number" ? Math.max(1, Math.min(5, Math.round(d.rating))) : 0,
+      note: typeof d.note === "string" ? d.note : "",
+    };
+  };
+  const list = (key: string): string[] => (Array.isArray(v[key]) ? (v[key] as unknown[]).map((x) => (typeof x === "string" ? x : "")) : []);
+
+  return {
+    headline: v.headline,
+    overall_score: Math.max(0, Math.min(100, Math.round(v.overall_score))),
+    technical_competency: dimension("technical_competency"),
+    communication: dimension("communication"),
+    problem_solving: dimension("problem_solving"),
+    role_fit: dimension("role_fit"),
+    strengths: list("strengths"),
+    concerns: list("concerns"),
+    evidence: list("evidence"),
+    confidence: typeof v.confidence === "number" ? Math.max(0, Math.min(1, v.confidence)) : 0,
+  };
+}
+
+function toQuestionSet(value: unknown): InterviewQuestions | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.headline !== "string" || !Array.isArray(v.sections)) return null;
+  return normalizeInterviewQuestions(v);
+}
+
 /**
  * Loads the full recruitment workspace: jobs (with department + candidate
  * counts), candidates (with skills, resume presence and latest assessment)
@@ -188,10 +284,11 @@ export async function fetchRecruitmentData(): Promise<RecruitmentData> {
   const supabase = getSupabaseServer();
   if (!supabase) throw new Error("Supabase is not configured.");
 
-  const [jobRes, candidateRes, deptRes, assessmentRes] = await Promise.all([
+  const [jobRes, candidateRes, deptRes, assessmentRes, interviewRes, interviewQuestionRes, evaluationRes] = await Promise.all([
     supabase.from("jobs").select(`
       id, title, department_id, status, employment_type, location, headcount,
       description, required_skills, preferred_skills, experience, education, seniority,
+      interview_question_set,
       departments(name),
       candidates(id)
     `).order("created_at", { ascending: false }),
@@ -208,6 +305,15 @@ export async function fetchRecruitmentData(): Promise<RecruitmentData> {
       education_match, recommendation, summary, why_matches, missing_requirements,
       relevant_evidence, interview_focus, strengths, gaps, next_step, confidence, updated_at
     `),
+    supabase.from("interviews").select(`
+      id, candidate_id, interview_type, status, scheduled_at, ai_insight,
+      employees(profiles(full_name))
+    `).order("scheduled_at", { ascending: false }),
+    supabase.from("interview_questions").select("id, interview_id, title, question, order_index"),
+    supabase.from("interview_evaluation_rows").select(`
+      id, interview_id, question, candidate_response, rating, notes,
+      employees(profiles(full_name))
+    `),
   ]);
 
   for (const [label, res] of [
@@ -215,6 +321,9 @@ export async function fetchRecruitmentData(): Promise<RecruitmentData> {
     ["candidates", candidateRes],
     ["departments", deptRes],
     ["assessments", assessmentRes],
+    ["interviews", interviewRes],
+    ["interview questions", interviewQuestionRes],
+    ["interview evaluation records", evaluationRes],
   ] as const) {
     if (res.error) throw new Error(`Failed to load ${label}: ${res.error.message}`);
   }
@@ -229,6 +338,51 @@ export async function fetchRecruitmentData(): Promise<RecruitmentData> {
     byCandidateJob.set(`${row.candidate_id}:${row.job_id}`, toAssessment(row));
   }
 
+  const jobById = new Map(jobs.map((j) => [j.id, j]));
+
+  const questionsByInterview = new Map<string, InterviewQuestionRow[]>();
+  for (const row of (interviewQuestionRes.data ?? []) as unknown as InterviewQuestionRowRaw[]) {
+    const list = questionsByInterview.get(row.interview_id) ?? [];
+    list.push({
+      id: row.id,
+      title: row.title,
+      question: row.question,
+      order_index: row.order_index,
+    });
+    questionsByInterview.set(row.interview_id, list);
+  }
+
+  const recordsByInterview = new Map<string, InterviewEvaluationRecord[]>();
+  for (const row of (evaluationRes.data ?? []) as unknown as EvaluationRowRaw[]) {
+    const list = recordsByInterview.get(row.interview_id) ?? [];
+    list.push({
+      id: row.id,
+      question: row.question,
+      candidate_response: row.candidate_response,
+      rating: row.rating != null ? Number(row.rating) : null,
+      notes: row.notes,
+      interviewer_name: row.employees?.profiles?.full_name ?? null,
+    });
+    recordsByInterview.set(row.interview_id, list);
+  }
+
+  const interviewsByCandidate = new Map<string, CandidateInterview[]>();
+  for (const row of (interviewRes.data ?? []) as unknown as InterviewRowRaw[]) {
+    const interview: CandidateInterview = {
+      id: row.id,
+      status: row.status,
+      interview_type: row.interview_type,
+      scheduled_at: row.scheduled_at,
+      interviewer_name: row.employees?.profiles?.full_name ?? null,
+      questions: questionsByInterview.get(row.id) ?? [],
+      evaluation_records: recordsByInterview.get(row.id) ?? [],
+      ai_insight: toInterviewInsight(row.ai_insight),
+    };
+    const list = interviewsByCandidate.get(row.candidate_id) ?? [];
+    list.push(interview);
+    interviewsByCandidate.set(row.candidate_id, list);
+  }
+
   const candidates: RecruitmentCandidate[] = candidateRows.map((c) => {
     const skills = (c.candidate_skills ?? [])
       .map((s) => s.skills?.name)
@@ -236,6 +390,7 @@ export async function fetchRecruitmentData(): Promise<RecruitmentData> {
       .sort((a, b) => a.localeCompare(b));
 
     const resume = c.resumes?.[0];
+    const job = c.job_id ? jobById.get(c.job_id) : null;
     const assessment =
       (c.job_id ? byCandidateJob.get(`${c.id}:${c.job_id}`) : undefined) ??
       [...byCandidateJob.entries()].find(([key]) => key.startsWith(`${c.id}:`))?.[1] ??
@@ -263,6 +418,8 @@ export async function fetchRecruitmentData(): Promise<RecruitmentData> {
       has_resume: Boolean(c.resumes && c.resumes.length > 0),
       resume_file_name: resume?.file_name ?? null,
       assessment,
+      question_set: job ? toQuestionSet(job.interview_question_set) : null,
+      interviews: interviewsByCandidate.get(c.id) ?? [],
     };
   });
 
@@ -281,6 +438,7 @@ export async function fetchRecruitmentData(): Promise<RecruitmentData> {
     experience: j.experience,
     education: j.education,
     seniority: j.seniority,
+    question_set: toQuestionSet(j.interview_question_set),
     candidate_count: j.candidate_count ?? j.candidates?.length ?? 0,
   }));
 

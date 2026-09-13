@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { JobFormDialog } from "@/components/hr/recruitment/job-form-dialog";
-import { InterviewQuestionsDialog } from "@/components/hr/recruitment/interview-questions-dialog";
+import { InterviewSetupDialog } from "@/components/hr/recruitment/interview-questions-dialog";
 
 interface JobsViewProps {
   jobs: RecruitmentJob[];
@@ -153,11 +153,11 @@ export function JobsView({ jobs, candidates, departments, onChanged }: JobsViewP
       )}
 
       {questionsFor && (
-        <InterviewQuestionsDialog
+        <InterviewSetupDialog
           open={Boolean(questionsFor)}
           onOpenChange={(open) => setQuestionsFor(open ? questionsFor : null)}
-          jobId={questionsFor.id}
-          jobTitle={questionsFor.title}
+          job={questionsFor}
+          onSaved={onChanged}
         />
       )}
     </div>

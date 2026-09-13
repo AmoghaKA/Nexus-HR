@@ -406,13 +406,14 @@ function buildDataPackage(base: Awaited<ReturnType<typeof fetchBaseData>>): Work
   // Recruitment
   const openRoles = jobs.filter((j) => j.status === "published").length;
   const totalCandidates = candidates.length;
-  const activeCandidates = candidates.filter((c) => ["new", "screening", "interview", "offer"].includes(c.status)).length;
+  const activeCandidates = candidates.filter((c) => ["applied", "screening", "interview", "evaluation", "shortlisted"].includes(c.status)).length;
   const hiredLast90 = activeEmployees.filter((e) => e.date_of_joining != null && e.date_of_joining >= new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10)).length;
   const stageLabels: Array<[string, string]> = [
-    ["new", "Applied"],
+    ["applied", "Applied"],
     ["screening", "Screening"],
     ["interview", "Interviewed"],
-    ["offer", "Offered"],
+    ["evaluation", "Evaluation"],
+    ["shortlisted", "Shortlisted"],
     ["hired", "Hired"],
   ];
   const byStage: RecruitmentStage[] = stageLabels.map(([dbStatus, label]) => ({

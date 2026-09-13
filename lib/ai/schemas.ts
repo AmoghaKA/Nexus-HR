@@ -175,12 +175,63 @@ export interface InterviewEvaluation {
   confidence: number;
 }
 
+export interface InterviewDimensionScore {
+  rating: number; // 1..5
+  note: string;
+}
+
+/**
+ * Advisory-only interview insight. Derived from per-question interview
+ * records (interview_evaluation_rows) but never a hiring decision — HR always
+ * makes the final call.
+ */
+export interface InterviewInsight {
+  headline: string;
+  overall_score: number; // 0..100
+  technical_competency: InterviewDimensionScore;
+  communication: InterviewDimensionScore;
+  problem_solving: InterviewDimensionScore;
+  role_fit: InterviewDimensionScore;
+  strengths: string[];
+  concerns: string[];
+  evidence: string[];
+  confidence: number;
+}
+
 export interface PolicyAnswer {
   answer: string;
   explanation: string;
   confidence: number;
   citations: { policy: string; section: string }[];
   disclaimer: string;
+}
+
+export interface CopilotEvidence {
+  label: string;
+  value: string;
+  detail?: string;
+}
+
+export interface CopilotEntityRef {
+  name: string;
+  note?: string;
+  id?: string;
+}
+
+/**
+ * Structured answer produced by the HR AI Workforce Copilot. Everything is
+ * advisory and grounded in the supplied data package; entity refs carry a
+ * stable id (attached server-side) so the UI can link to real records.
+ */
+export interface CopilotAnswer {
+  answer: string;
+  evidence: CopilotEvidence[];
+  reasoning: string;
+  recommended_actions: string[];
+  relevant_departments: CopilotEntityRef[];
+  relevant_employees: CopilotEntityRef[];
+  relevant_candidates: CopilotEntityRef[];
+  confidence: number;
 }
 
 export interface CareerPath {
@@ -568,6 +619,31 @@ export const interviewEvaluationSchema: Schema = obj(
   ["headline", "overall_score", "dimensions", "highlights", "risks", "recommendation", "next_step", "confidence"]
 );
 
+const interviewDimensionSchema: Schema = obj("Scored dimension", {
+  rating: integer("Rating 1-5"),
+  note: str("Short supporting note"),
+}, ["rating", "note"]);
+
+export const interviewInsightSchema: Schema = obj(
+  "Advisory interview insight derived from per-question interview records.",
+  {
+    headline: str("One-line summary of the interview"),
+    overall_score: integer("Overall fit score 0-100"),
+    technical_competency: interviewDimensionSchema,
+    communication: interviewDimensionSchema,
+    problem_solving: interviewDimensionSchema,
+    role_fit: interviewDimensionSchema,
+    strengths: arr("Demonstrated strengths", str("Strength")),
+    concerns: arr("Concerns raised by the responses", str("Concern")),
+    evidence: arr("Evidence drawn directly from the recorded responses", str("Evidence")),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  [
+    "headline", "overall_score", "technical_competency", "communication",
+    "problem_solving", "role_fit", "strengths", "concerns", "evidence", "confidence",
+  ]
+);
+
 export const resumeAnalysisSchema: Schema = obj(
   "Structured candidate profile extracted from a resume. Extract ONLY job-relevant facts present in the text — never invent anything and never record or infer protected characteristics (gender, age, race, religion, marital/family status, disability, nationality).",
   {
@@ -669,6 +745,34 @@ export const policyAnswerSchema: Schema = obj(
     disclaimer: str("Note that the answer is guidance, not legal advice"),
   },
   ["answer", "explanation", "confidence", "citations", "disclaimer"]
+);
+
+export const copilotAnswerSchema: Schema = obj(
+  "Answer to an HR workforce question, grounded in the provided workforce data package. Answer plus supporting evidence, reasoning, recommended actions and relevant entities.",
+  {
+    answer: str("Direct, plain-language answer to the user's question"),
+    evidence: arr("Concrete facts pulled verbatim from the provided data package", obj("Evidence fact", {
+      label: str("Short label, e.g. 'Engineering avg risk score'"),
+      value: str("The actual number or fact in plain text"),
+      detail: str("Optional supporting detail, e.g. '10 employees'"),
+    }, ["label", "value"])),
+    reasoning: str("Explain how the evidence leads to the answer"),
+    recommended_actions: arr("Concrete, prioritized recommended next steps", str("Recommended action")),
+    relevant_departments: arr("Departments referenced by the answer", obj("Department", {
+      name: str("Department name exactly as shown in the provided context"),
+      note: str("Why this department is relevant"),
+    }, ["name"])),
+    relevant_employees: arr("Employees referenced by the answer", obj("Employee", {
+      name: str("Employee full name exactly as shown in the provided context"),
+      note: str("Why this employee is relevant, e.g. 'high-risk: 78'"),
+    }, ["name"])),
+    relevant_candidates: arr("Candidates referenced by the answer", obj("Candidate", {
+      name: str("Candidate full name exactly as shown in the provided context"),
+      note: str("Why this candidate is relevant, e.g. '92 match'"),
+    }, ["name"])),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["answer", "evidence", "reasoning", "recommended_actions", "relevant_departments", "relevant_employees", "relevant_candidates", "confidence"]
 );
 
 export const careerRecommendationsSchema: Schema = obj(
@@ -1077,6 +1181,30 @@ export function normalizeInterviewEvaluation(raw: Record<string, unknown>): Inte
   };
 }
 
+function normalizeDimensionScore(row: Record<string, unknown>): InterviewDimensionScore {
+  return {
+    rating: clamp(Math.round(asNumber(row.rating)), 1, 5),
+    note: asString(row.note),
+  };
+}
+
+export function normalizeInterviewInsight(raw: Record<string, unknown>): InterviewInsight {
+  const dimension = (key: string): InterviewDimensionScore =>
+    normalizeDimensionScore(((raw[key] ?? {}) as Record<string, unknown>));
+  return {
+    headline: asString(raw.headline),
+    overall_score: clamp(Math.round(asNumber(raw.overall_score)), 0, 100),
+    technical_competency: dimension("technical_competency"),
+    communication: dimension("communication"),
+    problem_solving: dimension("problem_solving"),
+    role_fit: dimension("role_fit"),
+    strengths: asStringArray(raw.strengths),
+    concerns: asStringArray(raw.concerns),
+    evidence: asStringArray(raw.evidence),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
 export function normalizePolicyAnswer(raw: Record<string, unknown>): PolicyAnswer {
   const citations = Array.isArray(raw.citations) ? raw.citations : [];
   return {
@@ -1088,6 +1216,43 @@ export function normalizePolicyAnswer(raw: Record<string, unknown>): PolicyAnswe
       return { policy: asString(row.policy), section: asString(row.section) };
     }),
     disclaimer: asString(raw.disclaimer),
+  };
+}
+
+function normalizeCopilotEntityRefs(raw: unknown): CopilotEntityRef[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const row = (item ?? {}) as Record<string, unknown>;
+      const name = asString(row.name);
+      if (!name) return null;
+      const ref: CopilotEntityRef = { name };
+      const note = asString(row.note);
+      if (note) ref.note = note;
+      const id = asString(row.id);
+      if (id) ref.id = id;
+      return ref;
+    })
+    .filter((ref): ref is CopilotEntityRef => ref !== null);
+}
+
+export function normalizeCopilotAnswer(raw: Record<string, unknown>): CopilotAnswer {
+  const evidence = Array.isArray(raw.evidence) ? raw.evidence : [];
+  return {
+    answer: asString(raw.answer),
+    evidence: evidence.map((e) => {
+      const row = (e ?? {}) as Record<string, unknown>;
+      const item: CopilotEvidence = { label: asString(row.label), value: asString(row.value) };
+      const detail = asString(row.detail);
+      if (detail) item.detail = detail;
+      return item;
+    }),
+    reasoning: asString(raw.reasoning),
+    recommended_actions: asStringArray(raw.recommended_actions),
+    relevant_departments: normalizeCopilotEntityRefs(raw.relevant_departments),
+    relevant_employees: normalizeCopilotEntityRefs(raw.relevant_employees),
+    relevant_candidates: normalizeCopilotEntityRefs(raw.relevant_candidates),
+    confidence: asConfidence(raw.confidence),
   };
 }
 

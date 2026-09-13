@@ -3,6 +3,9 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { fetchRecruitmentData, type RecruitmentData } from "@/lib/hr/recruitment";
 import { extractResumeText, MAX_RESUME_BYTES } from "@/lib/hiring/resume-parse";
+import { generateInterviewQuestions } from "@/lib/ai/actions";
+import type { InterviewQuestions } from "@/lib/ai/schemas";
+import type { InterviewSetupOptions } from "@/lib/ai/features";
 
 // ---------------------------------------------------------------------------
 // Recruitment workspace server actions (data mutations + resume intake).
@@ -195,6 +198,161 @@ export async function uploadCandidateResume(
     return { ok: true, extractedChars: text.length };
   } catch (error) {
     return errorOf(error, "Something went wrong uploading the resume.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Intelligent Interview Agent
+// ---------------------------------------------------------------------------
+
+export async function saveJobInterviewQuestionSet(
+  jobId: string,
+  questionSet: InterviewQuestions
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = getSupabaseServer();
+    if (!supabase) return { ok: false, error: "Supabase is not configured." };
+    const { error } = await supabase
+      .from("jobs")
+      .update({ interview_question_set: questionSet })
+      .eq("id", jobId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (error) {
+    return errorOf(error, "Something went wrong saving the question set.");
+  }
+}
+
+const INTERVIEW_TYPES = ["phone", "video", "onsite", "panel"];
+
+export interface CreateInterviewResult {
+  ok: boolean;
+  interviewId?: string;
+  questionSetGenerated?: boolean;
+  error?: string;
+}
+
+/**
+ * Creates an interview for a candidate against their assigned role. Uses the
+ * role's saved AI question set when present, otherwise generates one on the
+ * fly (optionally shaped by InterviewSetupOptions) and saves it for the whole
+ * team. The candidate is moved to the interview pipeline stage — people in
+ * the loop remain in control of every step.
+ */
+export async function createInterview(
+  candidateId: string,
+  input: { interview_type: string; scheduled_at: string | null },
+  setup?: InterviewSetupOptions
+): Promise<CreateInterviewResult> {
+  try {
+    const supabase = getSupabaseServer();
+    if (!supabase) return { ok: false, error: "Supabase is not configured." };
+
+    const { data: candidate, error: cErr } = await supabase
+      .from("candidates")
+      .select("id, job_id, status")
+      .eq("id", candidateId)
+      .maybeSingle();
+    if (cErr) return { ok: false, error: cErr.message };
+    if (!candidate?.job_id) return { ok: false, error: "This candidate has no assigned role. Assign a job first." };
+
+    const { data: job, error: jErr } = await supabase
+      .from("jobs")
+      .select("id, title, interview_question_set")
+      .eq("id", candidate.job_id)
+      .maybeSingle();
+    if (jErr) return { ok: false, error: jErr.message };
+    if (!job) return { ok: false, error: "The candidate's role no longer exists." };
+
+    let questionSet = (job.interview_question_set ?? null) as InterviewQuestions | null;
+    let questionSetGenerated = false;
+    if (!questionSet) {
+      const gen = await generateInterviewQuestions(job.id, setup);
+      if (!gen.ok || !gen.questions) return { ok: false, error: gen.error ?? "Failed to generate the interview question set." };
+      questionSet = gen.questions;
+      questionSetGenerated = true;
+      await supabase.from("jobs").update({ interview_question_set: questionSet }).eq("id", job.id);
+    }
+
+    const interviewType = INTERVIEW_TYPES.includes(input.interview_type) ? input.interview_type : "onsite";
+
+    const { data: interview, error: iErr } = await supabase
+      .from("interviews")
+      .insert({
+        job_id: job.id,
+        candidate_id: candidateId,
+        interview_type: interviewType,
+        status: "scheduled",
+        scheduled_at: input.scheduled_at || null,
+      })
+      .select("id")
+      .single();
+    if (iErr) return { ok: false, error: `Failed to create the interview: ${iErr.message}` };
+
+    if (questionSet) {
+      const questionRows: Record<string, unknown>[] = [];
+      for (const section of questionSet.sections) {
+        for (const q of section.questions) {
+          questionRows.push({
+            interview_id: interview.id,
+            title: section.focus_area,
+            question: q.question,
+            order_index: questionRows.length,
+          });
+        }
+      }
+      if (questionRows.length > 0) {
+        const { error: qErr } = await supabase.from("interview_questions").insert(questionRows);
+        if (qErr) return { ok: false, error: `Interview created but its question set failed to save: ${qErr.message}` };
+      }
+    }
+
+    if (candidate.status !== "interview") {
+      await supabase.from("candidates").update({ status: "interview" }).eq("id", candidateId);
+    }
+
+    return { ok: true, interviewId: interview.id, questionSetGenerated: questionSetGenerated || undefined };
+  } catch (error) {
+    return errorOf(error, "Something went wrong setting up the interview.");
+  }
+}
+
+export interface EvaluationRowInput {
+  question: string;
+  candidate_response?: string | null;
+  rating: number | null;
+  notes?: string | null;
+}
+
+export async function recordInterviewEvaluationRows(
+  interviewId: string,
+  rows: EvaluationRowInput[]
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const cleaned = rows
+      .filter((r) => r.question?.trim())
+      .map((r) => cleanNulls({
+        interview_id: interviewId,
+        question: r.question.trim(),
+        candidate_response: r.candidate_response,
+        rating: r.rating,
+        notes: r.notes,
+      }));
+    if (cleaned.length === 0) return { ok: false, error: "At least one question record is required." };
+    for (const row of cleaned) {
+      if (row.rating != null && (typeof row.rating !== "number" || row.rating < 1 || row.rating > 5)) {
+        return { ok: false, error: "Ratings must be between 1 and 5." };
+      }
+    }
+    const supabase = getSupabaseServer();
+    if (!supabase) return { ok: false, error: "Supabase is not configured." };
+    const { error } = await supabase.from("interview_evaluation_rows").insert(cleaned);
+    if (error) return { ok: false, error: error.message };
+    const { error: sErr } = await supabase.from("interviews").update({ status: "completed" }).eq("id", interviewId);
+    if (sErr) return { ok: false, error: sErr.message };
+    return { ok: true };
+  } catch (error) {
+    return errorOf(error, "Something went wrong saving the evaluation.");
   }
 }
 

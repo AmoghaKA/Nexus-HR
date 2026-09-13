@@ -17,6 +17,7 @@ import {
   rankCandidate as runCandidateRanking,
   generateInterviewQuestions as runInterviewQuestions,
   evaluateInterview as runInterviewEvaluation,
+  generateInterviewInsight as runInterviewInsight,
   answerPolicyQuestion as runPolicyAnswer,
   generateCareerRecommendations as runCareerRecommendations,
   analyzeResume as runResumeAnalysis,
@@ -40,6 +41,8 @@ import {
   type RankCandidateResult,
   type GenerateInterviewQuestionsResult,
   type EvaluateInterviewResult,
+  type GenerateInterviewInsightResult,
+  type InterviewSetupOptions,
   type AnswerPolicyQuestionResult,
   type GenerateCareerRecommendationsResult,
   type AnalyzeResumeResult,
@@ -53,6 +56,10 @@ import {
   type LearningPlanResult,
 } from "@/lib/ai/features";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseAuth } from "@/lib/supabase/auth-client";
+import { workspaceRoleFromUser } from "@/lib/auth/role";
+import { generateCopilotAnswer as runCopilotAnswer, type CopilotIntent } from "@/lib/ai/copilot";
+import type { CopilotAnswer } from "@/lib/ai/schemas";
 
 export interface PickerOption {
   value: string;
@@ -406,9 +413,12 @@ export interface GenerateInterviewQuestionsActionResult {
   error?: string;
 }
 
-export async function generateInterviewQuestions(jobId: string): Promise<GenerateInterviewQuestionsActionResult> {
+export async function generateInterviewQuestions(
+  jobId: string,
+  options?: InterviewSetupOptions
+): Promise<GenerateInterviewQuestionsActionResult> {
   try {
-    const result = await runInterviewQuestions(jobId);
+    const result = await runInterviewQuestions(jobId, options);
     return { ok: true, questions: result.questions };
   } catch (error) {
     return { ok: false, error: messageOf(error, "Something went wrong generating interview questions.") };
@@ -452,6 +462,21 @@ export async function evaluateInterview(interviewId: string): Promise<EvaluateIn
     return { ok: true, evaluation: result.evaluation };
   } catch (error) {
     return { ok: false, error: messageOf(error, "Something went wrong evaluating the interview.") };
+  }
+}
+
+export interface GenerateInterviewInsightActionResult {
+  ok: boolean;
+  insight?: GenerateInterviewInsightResult["insight"];
+  error?: string;
+}
+
+export async function generateInterviewInsight(interviewId: string): Promise<GenerateInterviewInsightActionResult> {
+  try {
+    const result = await runInterviewInsight(interviewId);
+    return { ok: true, insight: result.insight };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong generating the interview insight.") };
   }
 }
 
@@ -763,5 +788,52 @@ export async function recommendLearning(): Promise<LearningPlanActionResult> {
     return { ok: true, plan: result.plan, saved: result.saved, persistError: result.persistError };
   } catch (error) {
     return { ok: false, error: messageOf(error, "Something went wrong generating learning recommendations.") };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 20. HR AI Workforce Copilot (/hr/copilot)
+// ---------------------------------------------------------------------------
+
+async function requireHrSession(): Promise<{ ok: true; error?: undefined } | { ok: false; error: string }> {
+  const auth = await getSupabaseAuth();
+  if (!auth) return { ok: false, error: "Supabase is not configured." };
+  const {
+    data: { user },
+    error,
+  } = await auth.auth.getUser();
+  if (error || !user) return { ok: false, error: "You are not signed in." };
+  if (workspaceRoleFromUser(user) !== "hr") {
+    return { ok: false, error: "Only HR staff can ask workforce questions." };
+  }
+  return { ok: true };
+}
+
+export interface AnswerCopilotQuestionActionResult {
+  ok: boolean;
+  intent?: CopilotIntent;
+  answer?: CopilotAnswer;
+  error?: string;
+}
+
+/**
+ * HR workload: "Ask the Workforce Copilot".
+ *
+ * Flow: classify intent => load targeted Supabase data => structured Gemini
+ * answer (answer/evidence/reasoning/actions/entities). Guarded server-side so
+ * employee accounts cannot invoke it even if they reach the route.
+ */
+export async function answerCopilotQuestion(
+  question: string,
+  history: string[] = []
+): Promise<AnswerCopilotQuestionActionResult> {
+  try {
+    const guard = await requireHrSession();
+    if (!guard.ok) return { ok: false, error: guard.error };
+
+    const result = await runCopilotAnswer(question, history);
+    return { ok: true, intent: result.intent, answer: result.answer };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong answering your question.") };
   }
 }

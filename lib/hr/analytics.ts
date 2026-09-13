@@ -319,10 +319,11 @@ export async function computeHrDashboardData(): Promise<HrDashboardData> {
 
   // ---- Recruitment pipeline ---------------------------------------------------
   const stageMap: Array<[string, string]> = [
-    ["new", "Applied"],
+    ["applied", "Applied"],
     ["screening", "Screening"],
     ["interview", "Interviewed"],
-    ["offer", "Offered"],
+    ["evaluation", "Evaluation"],
+    ["shortlisted", "Shortlisted"],
     ["hired", "Hired"],
   ];
   const pipeline: RecruitmentStage[] = stageMap.map(([dbStatus, label]) => ({
