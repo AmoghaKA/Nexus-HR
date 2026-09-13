@@ -111,21 +111,6 @@ body {
 }
 
 @layer utilities {
-  .landing-grid {
-    background-image: linear-gradient(to right, hsl(222 20% 88% / 0.45) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(222 20% 88% / 0.45) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: linear-gradient(to bottom, black, transparent 78%);
-  }
-
-  .landing-glow {
-    background: radial-gradient(circle, hsl(240 70% 82% / 0.42), transparent 68%);
-  }
-
-  .landing-rise {
-    animation: landing-rise 700ms ease-out both;
-  }
-
   .ai-gradient-border {
     position: relative;
     background:
@@ -134,15 +119,44 @@ body {
         border-box;
     border: 1px solid transparent;
   }
+
+  .sr-fade {
+    animation: sr-fade 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .sr-fade-d1 { animation-delay: 80ms; }
+  .sr-fade-d2 { animation-delay: 160ms; }
+  .sr-fade-d3 { animation-delay: 240ms; }
+  .sr-fade-d4 { animation-delay: 320ms; }
+  .sr-fade-d5 { animation-delay: 400ms; }
+  .sr-fade-d6 { animation-delay: 480ms; }
+
+  .glow-indigo {
+    background: radial-gradient(ellipse at center, hsl(243 68% 55% / 0.08), transparent 70%);
+  }
 }
 
-@keyframes landing-rise {
+@keyframes sr-fade {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-fade,
+  .sr-fade-d1,
+  .sr-fade-d2,
+  .sr-fade-d3,
+  .sr-fade-d4,
+  .sr-fade-d5,
+  .sr-fade-d6 {
+    animation: none;
+    opacity: 1;
+  }
+  html { scroll-behavior: auto; }
 }
