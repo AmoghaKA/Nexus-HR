@@ -488,13 +488,15 @@ export async function listInterviews(): Promise<{ ok: boolean; interviews: Picke
 export interface AnswerPolicyQuestionActionResult {
   ok: boolean;
   answer?: AnswerPolicyQuestionResult["answer"];
+  sources?: AnswerPolicyQuestionResult["sources"];
+  found?: boolean;
   error?: string;
 }
 
 export async function answerPolicyQuestion(question: string): Promise<AnswerPolicyQuestionActionResult> {
   try {
     const result = await runPolicyAnswer(question);
-    return { ok: true, answer: result.answer };
+    return { ok: true, answer: result.answer, sources: result.sources, found: result.found };
   } catch (error) {
     return { ok: false, error: messageOf(error, "Something went wrong answering the question.") };
   }

@@ -177,6 +177,7 @@ export interface InterviewEvaluation {
 
 export interface PolicyAnswer {
   answer: string;
+  explanation: string;
   confidence: number;
   citations: { policy: string; section: string }[];
   disclaimer: string;
@@ -659,6 +660,7 @@ export const policyAnswerSchema: Schema = obj(
   "Answer to a policy question grounded in the provided policy text.",
   {
     answer: str("Direct answer to the policy question"),
+    explanation: str("Explain how the answer follows from the cited policy text"),
     confidence: num("Model confidence between 0 and 1"),
     citations: arr("Policy sections that support the answer", obj("Citation", {
       policy: str("Policy title"),
@@ -666,7 +668,7 @@ export const policyAnswerSchema: Schema = obj(
     }, ["policy", "section"])),
     disclaimer: str("Note that the answer is guidance, not legal advice"),
   },
-  ["answer", "confidence", "citations", "disclaimer"]
+  ["answer", "explanation", "confidence", "citations", "disclaimer"]
 );
 
 export const careerRecommendationsSchema: Schema = obj(
@@ -1079,6 +1081,7 @@ export function normalizePolicyAnswer(raw: Record<string, unknown>): PolicyAnswe
   const citations = Array.isArray(raw.citations) ? raw.citations : [];
   return {
     answer: asString(raw.answer),
+    explanation: asString(raw.explanation),
     confidence: asConfidence(raw.confidence),
     citations: citations.map((c) => {
       const row = (c ?? {}) as Record<string, unknown>;

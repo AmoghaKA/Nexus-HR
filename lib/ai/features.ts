@@ -1674,12 +1674,24 @@ export async function evaluateInterview(interviewId: string): Promise<EvaluateIn
 }
 
 // ---------------------------------------------------------------------------
-// 10. Policy Question
+// 10. Policy Question (retrieval-grounded reasoning agent)
 // ---------------------------------------------------------------------------
+
+export interface PolicyAnswerSource {
+  policyId: string;
+  title: string;
+  chunkIndex: number;
+  score: number;
+}
 
 export interface AnswerPolicyQuestionResult {
   answer: PolicyAnswer;
+  sources: PolicyAnswerSource[];
+  found: boolean;
 }
+
+const NOT_FOUND_ANSWER =
+  "I couldn't find sufficient information in the available HR policies.";
 
 export async function answerPolicyQuestion(question: string): Promise<AnswerPolicyQuestionResult> {
   const supabase = requireSupabase();
@@ -1695,28 +1707,86 @@ export async function answerPolicyQuestion(question: string): Promise<AnswerPoli
   if (policies.length === 0) throw new Error("No published policies found to answer from.");
 
   const chunks = (chunkRes.data ?? []) as { policy_id: string; chunk_index: number; content: string }[];
-  const titleById = new Map(policies.map((p) => [p.id, p.title]));
+  const policyById = new Map(policies.map((p) => [p.id, p]));
 
+  // --- Keyword extraction ----------------------------------------------------
   const tokens = question.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t.length > 2);
   const uniqueTokens = Array.from(new Set(tokens));
-  const stop = new Set(["what", "when", "where", "which", "would", "should", "could", "does", "there", "about", "with", "that", "this", "have", "been"]);
+  const stop = new Set(["what", "when", "where", "which", "would", "should", "could", "does", "there", "about", "with", "that", "this", "have", "been", "want", "like", "know"]);
   const keywords = uniqueTokens.filter((t) => !stop.has(t));
+  if (keywords.length === 0) {
+    return {
+      answer: {
+        answer: NOT_FOUND_ANSWER,
+        explanation: "The question does not contain enough distinguishing terms to retrieve a relevant policy section.",
+        confidence: 0,
+        citations: [],
+        disclaimer: "This is guidance, not legal advice.",
+      },
+      sources: [],
+      found: false,
+    };
+  }
+
+  // --- Relevance scoring -----------------------------------------------------
+  // A chunk scores on how many distinct question keywords it contains, plus a
+  // boost when those keywords also appear in the policy title (i.e. the user
+  // asked about a specific document).
+  const termFrequency = (text: string) => {
+    const counts = new Map<string, number>();
+    for (const token of text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)) {
+      if (keywords.includes(token)) counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+    return counts;
+  };
+
+  const titleBoostById = new Map<string, number>();
+  for (const p of policies) {
+    const titleFreq = termFrequency(`${p.title} ${p.category ?? ""}`);
+    titleBoostById.set(p.id, titleFreq.size);
+  }
 
   const scored = chunks
     .map((c) => {
-      const lower = c.content.toLowerCase();
-      const hits = keywords.filter((k) => lower.includes(k)).length;
-      return { ...c, score: hits };
+      const freq = termFrequency(c.content);
+      const hits = Array.from(freq.values()).reduce((a, b) => a + b, 0);
+      const distinct = freq.size;
+      const score = distinct + hits * 0.25 + (titleBoostById.get(c.policy_id) ?? 0) * 1.5;
+      return { ...c, score };
     })
     .filter((c) => c.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
-  const context = scored.length
-    ? scored
-        .map((c) => `[${titleById.get(c.policy_id) ?? "Policy"} / chunk ${c.chunk_index}]\n${c.content.slice(0, 1500)}`)
-        .join("\n\n---\n\n")
-    : policies.map((p) => `[${p.title}] (no matching chunk found) ${p.category ?? ""}`).join("\n");
+  const sources: PolicyAnswerSource[] = Array.from(
+    new Map(scored.map((c) => [c.policy_id, c])).values()
+  ).map((c) => ({
+    policyId: c.policy_id,
+    title: policyById.get(c.policy_id)?.title ?? "Policy",
+    chunkIndex: c.chunk_index,
+    score: Number(c.score.toFixed(1)),
+  }));
+
+  // --- Anti-hallucination guard ---------------------------------------------
+  // With no matching chunk, return a deterministic refusal instead of asking the
+  // model to guess — company rules must never be invented.
+  if (scored.length === 0) {
+    return {
+      answer: {
+        answer: NOT_FOUND_ANSWER,
+        explanation: "No policy section matched the terms in your question, so no retrieved context is available to ground an answer.",
+        confidence: 0,
+        citations: [],
+        disclaimer: "This is guidance, not legal advice.",
+      },
+      sources: [],
+      found: false,
+    };
+  }
+
+  const context = scored
+    .map((c) => `[${policyById.get(c.policy_id)?.title ?? "Policy"} / section ${c.chunk_index + 1}]\n${c.content.slice(0, 1500)}`)
+    .join("\n\n---\n\n");
 
   const prompt = [
     `HR policy question: "${question}"`,
@@ -1724,8 +1794,12 @@ export async function answerPolicyQuestion(question: string): Promise<AnswerPoli
     "Retrieved policy context:",
     context,
     "",
-    "Return the policy answer JSON (answer, confidence, citations with policy/section, disclaimer).",
-    "Answer only from the provided policy context; if the context does not cover the question, say so and lower confidence. Add a short disclaimer that this is guidance, not legal advice.",
+    "Return the policy answer JSON (answer, explanation, confidence, citations with policy/section, disclaimer).",
+    "Answer only from the provided policy context and never invent company rules.",
+    "Explain in 'explanation' how the answer follows from the cited policy text.",
+    "If the retrieved context does NOT contain enough information to answer, respond with exactly:",
+    `"${NOT_FOUND_ANSWER}"`,
+    "and set confidence to 0.",
   ].join("\n");
 
   const parsed = await generateStructuredJSON<Record<string, unknown>>({
@@ -1735,7 +1809,12 @@ export async function answerPolicyQuestion(question: string): Promise<AnswerPoli
     temperature: 0.2,
   });
 
-  return { answer: normalizePolicyAnswer(parsed) };
+  const answer = normalizePolicyAnswer(parsed);
+  return {
+    answer: answer.answer && answer.answer !== NOT_FOUND_ANSWER ? answer : { ...answer, answer: NOT_FOUND_ANSWER, confidence: 0 },
+    sources,
+    found: Boolean(answer.answer && answer.answer !== NOT_FOUND_ANSWER),
+  };
 }
 
 // ---------------------------------------------------------------------------
