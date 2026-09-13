@@ -111,6 +111,21 @@ body {
 }
 
 @layer utilities {
+  .landing-grid {
+    background-image: linear-gradient(to right, hsl(222 20% 88% / 0.45) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(222 20% 88% / 0.45) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(to bottom, black, transparent 78%);
+  }
+
+  .landing-glow {
+    background: radial-gradient(circle, hsl(240 70% 82% / 0.42), transparent 68%);
+  }
+
+  .landing-rise {
+    animation: landing-rise 700ms ease-out both;
+  }
+
   .ai-gradient-border {
     position: relative;
     background:
@@ -118,5 +133,16 @@ body {
       linear-gradient(120deg, hsl(243 68% 55%), hsl(199 89% 48%), hsl(278 64% 58%))
         border-box;
     border: 1px solid transparent;
+  }
+}
+
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
