@@ -2,6 +2,7 @@ import { buildWorkforceBriefing, prepareBriefingPrompt } from "@/lib/ai/briefing
 import { buildEmployeeAnalysis, prepareEmployeePrompt, type EmployeeAnalysisPackage } from "@/lib/ai/employee";
 import { fetchEmployeeDetail } from "@/lib/hr/directory";
 import { generateStructuredJSON } from "@/lib/ai/router";
+import { computeSkillGraphData, type RawSkillData, type SkillGraphData } from "@/lib/hr/skills";
 import {
   attritionReportSchema,
   candidateComparisonSchema,
@@ -15,6 +16,7 @@ import {
   interviewQuestionsSchema,
   learningPlanSchema,
   onboardingPlanSchema,
+  onboardingProgressSchema,
   performanceAnalysisSchema,
   performanceCoachSchema,
   policyAnswerSchema,
@@ -22,6 +24,7 @@ import {
   sharpenedGoalSchema,
   skillPlanSchema,
   skillRecommendationSchema,
+  workforceSkillsSchema,
   type AttritionReport,
   type CandidateComparison,
   type CandidateMatch,
@@ -34,6 +37,7 @@ import {
   type InterviewQuestions,
   type LearningPlan,
   type OnboardingPlan,
+  type OnboardingProgressInsight,
   type PerformanceAnalysis,
   type PerformanceCoach,
   type PolicyAnswer,
@@ -41,6 +45,7 @@ import {
   type SharpenedGoal,
   type SkillPlan,
   type SkillRecommendationReport,
+  type WorkforceSkillsAnalysis,
   normalizeAttritionReport,
   normalizeCandidateComparison,
   normalizeCandidateMatch,
@@ -53,6 +58,7 @@ import {
   normalizeInterviewQuestions,
   normalizeLearningPlan,
   normalizeOnboardingPlan,
+  normalizeOnboardingProgress,
   normalizePerformanceAnalysis,
   normalizePerformanceCoach,
   normalizePolicyAnswer,
@@ -60,6 +66,7 @@ import {
   normalizeSharpenedGoal,
   normalizeSkillPlan,
   normalizeSkillRecommendations,
+  normalizeWorkforceSkills,
 } from "@/lib/ai/schemas";
 import type { AiInsight } from "@/types";
 import { saveInsights, toInsightRecord } from "@/lib/ai/store";
@@ -117,6 +124,233 @@ function insightFromAiInsight(i: AiInsight): GeminiInsight {
     action_type: "",
     affected_entities: [],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive onboarding helpers (shared by generate/evaluate features)
+// ---------------------------------------------------------------------------
+
+function addDaysText(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+interface OnboardingContext {
+  employeeId: string;
+  name: string;
+  role: string;
+  department: string;
+  joined: string | null;
+  status: string;
+  experienceYears: number | null;
+  skills: string[];
+  managerName: string | null;
+  existingPlans: { title: string; status: string }[];
+}
+
+async function fetchOnboardingContext(
+  supabase: NonNullable<ReturnType<typeof getSupabaseServer>>,
+  employeeId: string
+): Promise<OnboardingContext> {
+  const [empRes, planRes] = await Promise.all([
+    supabase
+      .from("employees")
+      .select(
+        "id, date_of_joining, employment_status, experience_years, manager_id, profiles(full_name), roles(title), departments(name), employee_skills(skills(name))"
+      )
+      .eq("id", employeeId)
+      .maybeSingle(),
+    supabase.from("onboarding_plans").select("title, status").eq("employee_id", employeeId),
+  ]);
+  checkQuery("employee", empRes);
+  checkQuery("onboarding_plans", planRes);
+
+  const emp = empRes.data as {
+    id: string;
+    date_of_joining: string | null;
+    employment_status: string;
+    experience_years: number | null;
+    manager_id: string | null;
+    profiles: { full_name: string } | null;
+    roles: { title: string } | null;
+    departments: { name: string } | null;
+    employee_skills: { skills: { name: string } | null }[] | null;
+  } | null;
+  if (!emp) throw new Error("Employee not found.");
+
+  let managerName: string | null = null;
+  if (emp.manager_id) {
+    const { data: mgr } = await supabase
+      .from("employees")
+      .select("profiles(full_name)")
+      .eq("id", emp.manager_id)
+      .maybeSingle();
+    managerName = (mgr as { profiles: { full_name: string } | null } | null)?.profiles?.full_name ?? null;
+  }
+
+  return {
+    employeeId: emp.id,
+    name: emp.profiles?.full_name ?? "New hire",
+    role: emp.roles?.title ?? "TBD",
+    department: emp.departments?.name ?? "Unassigned",
+    joined: emp.date_of_joining,
+    status: emp.employment_status,
+    experienceYears: emp.experience_years != null ? Number(emp.experience_years) : null,
+    skills: (emp.employee_skills ?? [])
+      .map((s) => s.skills?.name)
+      .filter((n): n is string => Boolean(n)),
+    managerName,
+    existingPlans: (planRes.data ?? []) as { title: string; status: string }[],
+  };
+}
+
+function promptForOnboardingPlan(ctx: OnboardingContext): string {
+  const lines = [
+    `Create a personalized onboarding journey for ${ctx.name}.`,
+    `Role: ${ctx.role} | Department: ${ctx.department} | Joined: ${ctx.joined ?? "not started"} | Status: ${ctx.status}.`,
+    `Years of experience: ${ctx.experienceYears != null ? `${ctx.experienceYears} year(s)` : "unknown"}.`,
+    `Known skills: ${ctx.skills.length ? ctx.skills.join(", ") : "none captured yet"}.`,
+    `Manager: ${ctx.managerName ?? "not assigned yet"}.`,
+    ctx.existingPlans.length
+      ? `Existing plans (do NOT invent these again): ${ctx.existingPlans.map((p) => `${p.title} (${p.status})`).join(", ")}.`
+      : "No onboarding plans exist yet — this journey will be persisted as Day 1 / Week 1 / Week 2 / Week 3 phases.",
+    "",
+    "Return the onboarding plan JSON (headline, expected_time_to_productivity_weeks, phases with phase/duration_weeks/objective/tasks(title,description,owner_role), confidence).",
+    "Structure the journey as exactly four phases named 'Day 1', 'Week 1', 'Week 2', 'Week 3' (duration_weeks 0, 1, 1, 1).",
+    "Phase content: Day 1 = company orientation, security setup, account provisioning; Week 1 = architecture overview, team introduction, repository/dev environment setup; Week 2 = first task with a small win, code review, mentorship pairing; Week 3 = independent contribution with manager alignment.",
+    "Personalize every phase to the role, department, experience level, and known skills above. Tasks must be concrete and trackable. owner_role should be the role responsible (e.g. 'IT', 'Manager', 'Buddy', 'Self').",
+    "Keep total phases to 4 and do not duplicate completed existing plans.",
+  ];
+  return lines.join("\n");
+}
+
+async function callOnboardingPlan(ctx: OnboardingContext): Promise<OnboardingPlan> {
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt: promptForOnboardingPlan(ctx),
+    schema: onboardingPlanSchema,
+    temperature: 0.35,
+  });
+  return normalizeOnboardingPlan(parsed);
+}
+
+async function persistOnboardingJourney(
+  supabase: NonNullable<ReturnType<typeof getSupabaseServer>>,
+  ctx: OnboardingContext,
+  plan: OnboardingPlan
+): Promise<{ persisted: boolean; skippedExisting: boolean }> {
+  if (ctx.existingPlans.length > 0) return { persisted: false, skippedExisting: true };
+
+  const start = ctx.joined ?? new Date().toISOString().slice(0, 10);
+  for (let i = 0; i < plan.phases.length; i += 1) {
+    const phase = plan.phases[i];
+    const due = addDaysText(start, Math.min(i, 3) * 7); // Day 1 → week 1 → week 2 → week 3
+    const { data: planRow, error } = await supabase
+      .from("onboarding_plans")
+      .insert({ employee_id: ctx.employeeId, title: phase.phase, status: "in_progress", start_date: due })
+      .select("id")
+      .single();
+    if (error) throw new Error(`Failed to save onboarding plan: ${error.message}`);
+    const tasks = phase.tasks.map((t, idx) => ({
+      plan_id: planRow.id,
+      title: t.title,
+      description: t.description || null,
+      assignee_id: ctx.employeeId,
+      status: "pending",
+      due_date: due,
+      order_index: idx,
+    }));
+    if (tasks.length) {
+      const { error: taskError } = await supabase.from("onboarding_tasks").insert(tasks);
+      if (taskError) throw new Error(`Failed to save onboarding tasks: ${taskError.message}`);
+    }
+  }
+  return { persisted: true, skippedExisting: false };
+}
+
+interface OnboardingStatsInput {
+  plans: { title: string; status: string; startDate: string | null; tasks: { title: string; status: string; dueDate: string | null }[] }[];
+}
+
+function onboardingStats(input: OnboardingStatsInput) {
+  const today = new Date().toISOString().slice(0, 10);
+  let total = 0;
+  let completed = 0;
+  let pending = 0;
+  let overdue = 0;
+  let blocked = 0;
+  const phaseLines: string[] = [];
+  let earliestStart: string | null = null;
+
+  for (const plan of input.plans) {
+    if (plan.startDate && (earliestStart === null || plan.startDate < earliestStart)) earliestStart = plan.startDate;
+    const statuses = new Map<string, number>();
+    for (const t of plan.tasks) {
+      total += 1;
+      if (t.status === "completed") completed += 1;
+      else if (t.status === "blocked") blocked += 1;
+      else if (t.dueDate && t.dueDate < today) overdue += 1;
+      else pending += 1;
+      statuses.set(t.status, (statuses.get(t.status) ?? 0) + 1);
+    }
+    phaseLines.push(`${plan.title}: ${[...statuses.entries()].map(([s, n]) => `${n} ${s}`).join(", ") || "no tasks"}`);
+  }
+
+  const daysSinceStart = earliestStart
+    ? Math.max(0, Math.round((Date.now() - new Date(`${earliestStart}T00:00:00Z`).getTime()) / 86_400_000))
+    : 0;
+  const progressPct = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+  return { counts: { total, completed, pending, overdue, blocked }, progressPct, daysSinceStart, phaseLines };
+}
+
+async function callOnboardingProgressAI(ctx: { name: string; role: string; stats: ReturnType<typeof onboardingStats> }): Promise<OnboardingProgressInsight> {
+  const { name, role, stats } = ctx;
+  const c = stats.counts;
+
+  if (c.total === 0) {
+    return {
+      headline: "No onboarding journey yet",
+      summary: `${name} has no active onboarding journey. There is nothing falling behind because there are no tracked tasks.`,
+      status: "on_track",
+      completed_pct: 0,
+      days_since_start: stats.daysSinceStart,
+      total_tasks: 0,
+      completed: 0,
+      pending: 0,
+      overdue: 0,
+      blocked: 0,
+      issue: "None — no plan exists to evaluate.",
+      recommendation: "Generate a personalized onboarding journey for this new hire.",
+      prescribed_actions: [
+        "Generate a personalized Day 1 / Week 1-3 onboarding journey.",
+        "Set a manager and onboarding buddy before the start date.",
+      ],
+      confidence: 0.85,
+    };
+  }
+
+  const prompt = [
+    `Adaptive onboarding assessment for ${name} (${role}).`,
+    `Days since start: ${stats.daysSinceStart}. Completed ${c.completed}/${c.total} tasks (${stats.progressPct}%), pending ${c.pending}, overdue ${c.overdue}, blocked ${c.blocked}.`,
+    stats.phaseLines.map((line) => `- ${line}`).join("\n"),
+    "",
+    "Return the onboarding progress JSON (headline, summary, status, completed_pct, days_since_start, total_tasks, completed, pending, overdue, blocked, issue, recommendation, prescribed_actions, confidence).",
+    "status is 'on_track' unless overdue>0 or blocked>0 or completion is far below schedule; use 'behind' when the hire has fallen meaningfully behind, 'at_risk' when early signals appear, 'blocked' when tasks are explicitly blocked.",
+    "When falling behind, identify the likely issue (e.g. 'Completed only 45% of onboarding after 2 weeks') and prescribe concrete actions (e.g. 'Assign an onboarding mentor and reschedule technical setup tasks').",
+    "completed_pct must match the provided numbers.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: onboardingProgressSchema,
+    temperature: 0.3,
+  });
+
+  return normalizeOnboardingProgress(parsed);
 }
 
 // ---------------------------------------------------------------------------
@@ -988,7 +1222,105 @@ export async function generateSkillRecommendations(): Promise<GenerateSkillRecom
 }
 
 // ---------------------------------------------------------------------------
-// 6. Onboarding Plan
+// 5b. Workforce Skill Graph (/hr/skills)
+//
+// Deterministic aggregation (employees → skills → roles → requirements) is
+// computed here so every number is exact and repeatable; Gemini adds the
+// business narrative, hiring-vs-upskilling recommendations.
+// ---------------------------------------------------------------------------
+
+export interface AnalyzeWorkforceSkillsResult {
+  graph: SkillGraphData;
+  analysis: WorkforceSkillsAnalysis;
+  saved: number;
+  persistError?: string;
+}
+
+export async function analyzeWorkforceSkills(): Promise<AnalyzeWorkforceSkillsResult> {
+  const supabase = requireSupabase();
+
+  const [skillsRes, estRes, empRes] = await Promise.all([
+    supabase.from("skills").select("id, name, category"),
+    supabase.from("employee_skills").select("skill_id, employee_id"),
+    supabase
+      .from("employees")
+      .select("id, employment_status, experience_years, profiles(full_name), roles(title), departments(name)"),
+  ]);
+  checkQuery("skills", skillsRes);
+  checkQuery("employee_skills", estRes);
+  checkQuery("employees", empRes);
+
+  const raw: RawSkillData = {
+    skills: (skillsRes.data ?? []) as RawSkillData["skills"],
+    employeeSkills: (estRes.data ?? []) as RawSkillData["employeeSkills"],
+    employees: ((empRes.data ?? []) as unknown as {
+      id: string;
+      employment_status: string;
+      experience_years: number | null;
+      profiles: { full_name: string } | null;
+      roles: { title: string } | null;
+      departments: { name: string } | null;
+    }[]).map((e) => ({
+      id: e.id,
+      employment_status: e.employment_status,
+      experience_years: e.experience_years,
+      name: e.profiles?.full_name ?? "Unknown",
+      role: e.roles?.title ?? null,
+      department: e.departments?.name ?? null,
+    })),
+  };
+
+  const graph = computeSkillGraphData(raw);
+
+  const top = graph.topGaps.slice(0, 10);
+  const prompt = [
+    "Analyze the workforce skill graph: how employee skills map to roles and business requirements.",
+    `Active workforce: ${graph.activeCount} employees. Catalog: ${graph.totalSkills} skills. Overall coverage: ${graph.coverage_pct}% (${graph.coveredHeadcount} of ${graph.requiredHeadcount} required headcount slots covered). Largest gap: ${graph.topGap}.`,
+    top.length
+      ? top
+          .map(
+            (r) =>
+              `- ${r.skill} (${r.category}): available ${r.available}, required ${r.required}, gap ${r.gap}, coverage ${r.coverage_pct}%, internal candidates ${r.candidates.length}`
+          )
+          .join("\n")
+      : "No skills found.",
+    "",
+    "Return the workforce skill graph JSON (headline, overall_assessment, top_finding, focus per skill with skill/rationale/recommended_action, recommended_actions, confidence).",
+    "recommended_action per skill must pick between: upskill existing employees, create a training program, hire externally, or reassign internal talent. Use only the numbers provided.",
+  ].join("\n");
+
+  const parsed = await generateStructuredJSON<Record<string, unknown>>({
+    system: SYSTEM_GUARDRAILS,
+    prompt,
+    schema: workforceSkillsSchema,
+    temperature: 0.25,
+  });
+
+  const analysis = normalizeWorkforceSkills(parsed);
+
+  const records = graph.topGaps
+    .slice(0, 3)
+    .map((r) =>
+      toInsightRecord({
+        title: `Skill graph gap: ${r.skill}`,
+        severity: r.gap >= 5 ? "high" : r.gap > 0 ? "medium" : "low",
+        summary: `${r.skill} requires ${r.required} people but only ${r.available} have it (gap ${r.gap}).`,
+        evidence: [`Available ${r.available}`, `Required ${r.required}`, `Coverage ${r.coverage_pct}%`],
+        reasoning: "Headcount gaps in critical skills are closed by upskilling, training, hiring, or internal reassignment.",
+        confidence: analysis.confidence,
+        recommended_action: "",
+        action_type: "training",
+        affected_entities: [r.category],
+      }, "skills")
+    );
+
+  const persisted = await persistInsights("workforce-skill-graph", records);
+
+  return { graph, analysis, saved: persisted.saved, persistError: persisted.persistError };
+}
+
+// ---------------------------------------------------------------------------
+// 6. Onboarding Plan + Adaptive onboarding journey
 // ---------------------------------------------------------------------------
 
 export interface GenerateOnboardingPlanResult {
@@ -1000,68 +1332,188 @@ export interface GenerateOnboardingPlanResult {
 
 export async function generateOnboardingPlan(employeeId: string): Promise<GenerateOnboardingPlanResult> {
   const supabase = requireSupabase();
-
-  const [empRes, planRes] = await Promise.all([
-    supabase
-      .from("employees")
-      .select("id, date_of_joining, employment_status, profiles(full_name), roles(title), departments(name)")
-      .eq("id", employeeId)
-      .maybeSingle(),
-    supabase.from("onboarding_plans").select("title, status").eq("employee_id", employeeId),
-  ]);
-  checkQuery("employee", empRes);
-  checkQuery("onboarding_plans", planRes);
-
-  const emp =
-    empRes.data as {
-      date_of_joining: string | null;
-      profiles: { full_name: string } | null;
-      roles: { title: string } | null;
-      departments: { name: string } | null;
-    } | null;
-  if (!emp) throw new Error("Employee not found.");
-
-  const existingPlans = (planRes.data ?? []) as { title: string; status: string }[];
-  const isRecent = emp.date_of_joining != null && emp.date_of_joining >= new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
-
-  const prompt = [
-    `Create a structured onboarding plan for ${emp.profiles?.full_name ?? "the new hire"}.`,
-    `Role: ${emp.roles?.title ?? "TBD"} | Department: ${emp.departments?.name ?? "Unassigned"} | Joined: ${emp.date_of_joining ?? "not started"} | Recent hire (<=90 days): ${isRecent ? "yes" : "no"}.`,
-    existingPlans.length ? `Existing plans: ${existingPlans.map((p) => `${p.title} (${p.status})`).join(", ")}` : "No existing onboarding plans.",
-    "",
-    "Return the onboarding plan JSON (headline, expected_time_to_productivity_weeks, phases with phase/duration_weeks/objective/tasks(title,description,owner_role), confidence).",
-    "Phase tasks should be concrete and cover setup, learning, first projects, and manager alignment. Avoid duplicating completed existing plans.",
-  ].join("\n");
-
-  const parsed = await generateStructuredJSON<Record<string, unknown>>({
-    system: SYSTEM_GUARDRAILS,
-    prompt,
-    schema: onboardingPlanSchema,
-    temperature: 0.35,
-  });
-
-  const plan = normalizeOnboardingPlan(parsed);
+  const ctx = await fetchOnboardingContext(supabase, employeeId);
+  const plan = await callOnboardingPlan(ctx);
 
   const { saved, persistError } = await persistInsights("onboarding-plan", [
     toInsightRecord({
-      title: `Onboarding plan: ${emp.profiles?.full_name ?? "New hire"}`,
+      title: `Onboarding plan: ${ctx.name}`,
       severity: "low",
       summary: plan.headline || `Generated ${plan.phases.length} phase(s), ~${plan.expected_time_to_productivity_weeks} weeks to productivity.`,
       evidence: plan.phases.map((p) => `${p.phase} (${p.duration_weeks}w): ${p.objective}`).slice(0, 4),
-      reasoning: "Generated from the hire's role, department, tenure, and existing plan state.",
+      reasoning: "Generated from the hire's role, department, experience, skills, manager, and existing plan state.",
       confidence: plan.confidence,
       recommended_action: "Assign an onboarding buddy and schedule the phase milestones.",
       action_type: "review",
-      affected_entities: [emp.departments?.name ?? ""],
+      affected_entities: [ctx.department],
+    }, "onboarding"),
+  ]);
+
+  return { plan, employeeName: ctx.name, saved, persistError };
+}
+
+export interface GenerateAndPersistOnboardingPlanResult {
+  plan: OnboardingPlan;
+  employeeName: string;
+  persisted: boolean;
+  skippedExisting: boolean;
+  saved: number;
+  persistError?: string;
+}
+
+/** Generates a personalized journey AND stores it as trackable
+ *  onboarding_plans / onboarding_tasks (Day 1, Week 1, Week 2, Week 3) with
+ *  due dates derived from the start date. Skips DB persist when the employee
+ *  already has plans so live tracking is never wiped. */
+export async function generateAndPersistOnboardingPlan(
+  employeeId: string
+): Promise<GenerateAndPersistOnboardingPlanResult> {
+  const supabase = requireSupabase();
+  const ctx = await fetchOnboardingContext(supabase, employeeId);
+  const plan = await callOnboardingPlan(ctx);
+
+  const db = await persistOnboardingJourney(supabase, ctx, plan);
+
+  const { saved, persistError } = await persistInsights("onboarding-plan", [
+    toInsightRecord({
+      title: `Onboarding journey: ${ctx.name}`,
+      severity: "low",
+      summary: db.persisted
+        ? `${plan.phases.length} phases persisted (${plan.expected_time_to_productivity_weeks} weeks to productivity).`
+        : plan.headline || `Generated ${plan.phases.length} phase(s) preview (existing plans kept).`,
+      evidence: plan.phases.map((p) => `${p.phase}: ${p.objective}`).slice(0, 4),
+      reasoning: "Personalized to role, department, experience, skills, and manager; persisted when no plan existed.",
+      confidence: plan.confidence,
+      recommended_action: "Confirm milestones with the manager and monitor weekly.",
+      action_type: "review",
+      affected_entities: [ctx.department],
     }, "onboarding"),
   ]);
 
   return {
     plan,
-    employeeName: emp.profiles?.full_name ?? "New hire",
+    employeeName: ctx.name,
+    persisted: db.persisted,
+    skippedExisting: db.skippedExisting,
     saved,
     persistError,
   };
+}
+
+export interface EvaluateOnboardingProgressResult {
+  insight: OnboardingProgressInsight;
+  employee: { name: string; role: string; joined: string | null };
+  saved: number;
+  persistError?: string;
+}
+
+/** HR-side adaptive assessment: tracks Completed / Pending / Overdue /
+ *  Blocked, then has Gemini diagnose the issue and prescribe actions. */
+export async function evaluateOnboardingProgress(employeeId: string): Promise<EvaluateOnboardingProgressResult> {
+  const supabase = requireSupabase();
+  const ctx = await fetchOnboardingContext(supabase, employeeId);
+
+  const plansRes = await supabase
+    .from("onboarding_plans")
+    .select("id, title, status, start_date")
+    .eq("employee_id", employeeId)
+    .order("created_at", { ascending: true });
+  checkQuery("onboarding_plans", plansRes);
+  const plans = (plansRes.data ?? []) as { id: string; title: string; status: string; start_date: string | null }[];
+
+  const planIds = plans.map((p) => p.id);
+  const taskRows: { plan_id: string; title: string; status: string; due_date: string | null }[] = [];
+  if (planIds.length) {
+    const { data, error } = await supabase
+      .from("onboarding_tasks")
+      .select("plan_id, title, status, due_date")
+      .in("plan_id", planIds)
+      .order("order_index", { ascending: true });
+    checkQuery("onboarding_tasks", { error });
+    taskRows.push(...((data ?? []) as { plan_id: string; title: string; status: string; due_date: string | null }[]));
+  }
+
+  const stats = onboardingStats({
+    plans: plans.map((p) => ({
+      title: p.title,
+      status: p.status,
+      startDate: p.start_date,
+      tasks: taskRows.filter((t) => t.plan_id === p.id).map((t) => ({ title: t.title, status: t.status, dueDate: t.due_date })),
+    })),
+  });
+
+  const insight = await callOnboardingProgressAI({ name: ctx.name, role: ctx.role, stats });
+
+  const { saved, persistError } = await persistInsights("onboarding-progress", [
+    toInsightRecord({
+      title: `Onboarding progress: ${ctx.name}`,
+      severity: insight.status === "behind" || insight.status === "blocked" ? "high" : insight.status === "at_risk" ? "medium" : "low",
+      summary: insight.headline,
+      evidence: [
+        `${stats.counts.completed}/${stats.counts.total} completed`,
+        `${stats.counts.overdue} overdue`,
+        `${stats.counts.blocked} blocked`,
+        `${stats.daysSinceStart}d since start`,
+      ],
+      reasoning: insight.issue || "Onboarding is on track.",
+      confidence: insight.confidence,
+      recommended_action: insight.recommendation,
+      action_type: insight.status === "behind" || insight.status === "blocked" ? "check-in" : "monitor",
+      affected_entities: [ctx.name],
+    }, "onboarding"),
+  ]);
+
+  return {
+    insight,
+    employee: { name: ctx.name, role: ctx.role, joined: ctx.joined },
+    saved,
+    persistError,
+  };
+}
+
+export interface EvaluateMyOnboardingProgressResult {
+  insight: OnboardingProgressInsight;
+  saved: number;
+  persistError?: string;
+}
+
+/** Employee-side variant of the same assessment, scoped to the signed-in
+ *  employee's own plan through RLS. */
+export async function evaluateMyOnboardingProgress(): Promise<EvaluateMyOnboardingProgressResult> {
+  const detail = await fetchEmployeeDetailSelf();
+  if (!detail) throw new Error("No employee profile is linked to your account yet.");
+
+  const stats = onboardingStats({
+    plans: detail.onboarding.map((p) => ({
+      title: p.title,
+      status: p.status,
+      startDate: p.startDate,
+      tasks: p.tasks.map((t) => ({ title: t.title, status: t.status, dueDate: t.dueDate })),
+    })),
+  });
+
+  const insight = await callOnboardingProgressAI({ name: detail.name, role: detail.role, stats });
+
+  const { saved, persistError } = await persistInsights("onboarding-progress", [
+    toInsightRecord({
+      title: `Onboarding progress: ${detail.name}`,
+      severity: insight.status === "behind" || insight.status === "blocked" ? "high" : insight.status === "at_risk" ? "medium" : "low",
+      summary: insight.headline,
+      evidence: [
+        `${stats.counts.completed}/${stats.counts.total} completed`,
+        `${stats.counts.overdue} overdue`,
+        `${stats.counts.blocked} blocked`,
+        `${stats.daysSinceStart}d since start`,
+      ],
+      reasoning: insight.issue || "Onboarding is on track.",
+      confidence: insight.confidence,
+      recommended_action: insight.recommendation,
+      action_type: insight.status === "behind" || insight.status === "blocked" ? "check-in" : "monitor",
+      affected_entities: [detail.name],
+    }, "onboarding"),
+  ]);
+
+  return { insight, saved, persistError };
 }
 
 // ---------------------------------------------------------------------------

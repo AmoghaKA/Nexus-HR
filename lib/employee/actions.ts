@@ -26,6 +26,19 @@ async function getUserSupabase() {
   });
 }
 
+type SelfSupabase = NonNullable<Awaited<ReturnType<typeof getUserSupabase>>>;
+
+/**
+ * Resolves the signed-in employee's own row id through RLS
+ * (employees are selectable only where profile_id = auth.uid()). Writes that
+ * link an employee_id to a row MUST use this id so the insert/update RLS
+ * `with check` (employee_id = current_employee_id()) passes.
+ */
+async function getSelfEmployeeId(supabase: SelfSupabase): Promise<string | null> {
+  const { data } = await supabase.from("employees").select("id").maybeSingle();
+  return data ? (data as { id: string }).id : null;
+}
+
 function messageOf(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
@@ -133,9 +146,23 @@ export async function createGoal(input: CreateGoalInput): Promise<GoalActionResu
       ? input.category
       : "personal";
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "You are not signed in." };
+
+    const employeeId = await getSelfEmployeeId(supabase);
+    if (!employeeId) {
+      return {
+        ok: false,
+        error: "Your account isn't linked to an employee record. Ask your administrator to provision it.",
+      };
+    }
+
     const { data: row, error } = await supabase
       .from("goals")
       .insert({
+        employee_id: employeeId,
         title: input.title.trim(),
         description: input.description?.trim() || null,
         category: category ?? "personal",

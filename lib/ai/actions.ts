@@ -10,6 +10,10 @@ import {
   analyzePerformance as runPerformance,
   generateSkillRecommendations as runSkills,
   generateOnboardingPlan as runOnboardingPlan,
+  generateAndPersistOnboardingPlan as runPersistOnboardingPlan,
+  evaluateOnboardingProgress as runEvaluateOnboardingProgress,
+  evaluateMyOnboardingProgress as runEvaluateMyOnboardingProgress,
+  analyzeWorkforceSkills as runWorkforceSkillsGraph,
   rankCandidate as runCandidateRanking,
   generateInterviewQuestions as runInterviewQuestions,
   evaluateInterview as runInterviewEvaluation,
@@ -29,6 +33,10 @@ import {
   type AnalyzePerformanceResult,
   type GenerateSkillRecommendationsResult,
   type GenerateOnboardingPlanResult,
+  type GenerateAndPersistOnboardingPlanResult,
+  type EvaluateOnboardingProgressResult,
+  type EvaluateMyOnboardingProgressResult,
+  type AnalyzeWorkforceSkillsResult,
   type RankCandidateResult,
   type GenerateInterviewQuestionsResult,
   type EvaluateInterviewResult,
@@ -253,6 +261,98 @@ export async function listOnboardingEmployees(): Promise<{ ok: boolean; employee
     return { ok: true, employees };
   } catch (error) {
     return { ok: false, employees: [], error: messageOf(error, "Failed to load employees.") };
+  }
+}
+
+export interface GenerateAndPersistOnboardingPlanActionResult {
+  ok: boolean;
+  plan?: GenerateAndPersistOnboardingPlanResult["plan"];
+  employeeName?: string;
+  persisted?: boolean;
+  skippedExisting?: boolean;
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+/** Adaptive onboarding centerpiece: generate a personalized Day 1 / Week 1-3
+ *  journey and persist it into onboarding_plans/onboarding_tasks so the new
+ *  hire can track it (Completed / Pending / Overdue / Blocked). */
+export async function generateAndPersistOnboardingPlan(
+  employeeId: string
+): Promise<GenerateAndPersistOnboardingPlanActionResult> {
+  try {
+    const result = await runPersistOnboardingPlan(employeeId);
+    return {
+      ok: true,
+      plan: result.plan,
+      employeeName: result.employeeName,
+      persisted: result.persisted,
+      skippedExisting: result.skippedExisting,
+      saved: result.saved,
+      persistError: result.persistError,
+    };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong generating the onboarding journey.") };
+  }
+}
+
+export interface EvaluateOnboardingProgressActionResult {
+  ok: boolean;
+  insight?: EvaluateOnboardingProgressResult["insight"];
+  employee?: EvaluateOnboardingProgressResult["employee"];
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+/** Adaptive assessment (HR): diagnoses the issue when a new hire is behind
+ *  and prescribes manager actions. */
+export async function evaluateOnboardingProgress(
+  employeeId: string
+): Promise<EvaluateOnboardingProgressActionResult> {
+  try {
+    const result = await runEvaluateOnboardingProgress(employeeId);
+    return { ok: true, insight: result.insight, employee: result.employee, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong evaluating onboarding progress.") };
+  }
+}
+
+export interface EvaluateMyOnboardingProgressActionResult {
+  ok: boolean;
+  insight?: EvaluateMyOnboardingProgressResult["insight"];
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+export async function evaluateMyOnboardingProgress(): Promise<EvaluateMyOnboardingProgressActionResult> {
+  try {
+    const result = await runEvaluateMyOnboardingProgress();
+    return { ok: true, insight: result.insight, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong evaluating your onboarding progress.") };
+  }
+}
+
+export interface AnalyzeWorkforceSkillsActionResult {
+  ok: boolean;
+  graph?: AnalyzeWorkforceSkillsResult["graph"];
+  analysis?: AnalyzeWorkforceSkillsResult["analysis"];
+  saved?: number;
+  persistError?: string;
+  error?: string;
+}
+
+/** Workforce Skill Graph: exact coverage/gap numbers plus AI insight and
+ *  hiring-vs-upskilling recommendations. */
+export async function analyzeWorkforceSkills(): Promise<AnalyzeWorkforceSkillsActionResult> {
+  try {
+    const result = await runWorkforceSkillsGraph();
+    return { ok: true, graph: result.graph, analysis: result.analysis, saved: result.saved, persistError: result.persistError };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong analyzing the workforce skill graph.") };
   }
 }
 

@@ -11,6 +11,26 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 const APP_ROLES: readonly AppRole[] = ["hr_admin", "hr_manager", "employee"];
 
 /**
+ * Repairs the granular role onto the auth user's `app_metadata` so the proxy's
+ * workspace routing matches the database/profiles source of truth. Non-fatal
+ * when the claim is already correct.
+ */
+async function ensureAppMetadataRole(
+  supabase: ReturnType<typeof getSupabaseServer> extends infer T ? T : never,
+  userId: string,
+  role: AppRole,
+): Promise<void> {
+  if (!supabase) return;
+  const user = await supabase.auth.admin.getUserById(userId);
+  if (user.error || !user.data.user) return;
+  const appMetadata = user.data.user.app_metadata ?? {};
+  if (appMetadata.role === role) return;
+  await supabase.auth.admin.updateUserById(userId, {
+    app_metadata: { ...appMetadata, role },
+  });
+}
+
+/**
  * Persists the role the user chose at sign-in onto their Supabase user record
  * (app_metadata) as a granular AppRole, then best-effort syncs the matching
  * `profiles` row. Uses the service role key server-side.
@@ -84,22 +104,38 @@ export async function resolveUserRole(
 
   const dbRole = profile?.role as AppRole | undefined;
   if (!dbRole || !APP_ROLES.includes(dbRole)) {
-    return {
-      ok: false,
-      error: "This account has no role assigned. Ask an administrator to provision your account.",
-    };
-  }
+    // No profiles row (or an unprovisioned one). Recover from the auth user's
+    // app_metadata claim — set at sign-up/sign-in — so unprovisioned accounts
+    // are adopted instead of dead-ending with "ask an administrator".
+    const user = await supabase.auth.admin.getUserById(userId);
+    if (user.error) return { ok: false, error: user.error.message };
 
-  const user = await supabase.auth.admin.getUserById(userId);
-  if (user.error) return { ok: false, error: user.error.message };
+    const claimRole = user.data.user?.app_metadata?.role as AppRole | undefined;
+    if (!claimRole || !APP_ROLES.includes(claimRole)) {
+      return {
+        ok: false,
+        error: "This account has no role assigned. Ask an administrator to provision your account.",
+      };
+    }
 
-  const appMetadata = user.data.user?.app_metadata ?? {};
-  if (appMetadata.role !== dbRole) {
-    const { error } = await supabase.auth.admin.updateUserById(userId, {
-      app_metadata: { ...appMetadata, role: dbRole },
+    const fullName =
+      typeof user.data.user?.user_metadata?.full_name === "string"
+        ? user.data.user.user_metadata.full_name
+        : "";
+
+    const { error: upsertError } = await supabase.from("profiles").upsert({
+      id: userId,
+      email: user.data.user?.email ?? "",
+      full_name: fullName,
+      role: claimRole,
     });
-    if (error) return { ok: false, error: error.message };
+    if (upsertError) return { ok: false, error: upsertError.message };
+
+    await ensureAppMetadataRole(supabase, userId, claimRole);
+    return { ok: true, role: claimRole, workspace: workspaceFromAppRole(claimRole) };
   }
+
+  await ensureAppMetadataRole(supabase, userId, dbRole);
 
   return { ok: true, role: dbRole, workspace: workspaceFromAppRole(dbRole) };
 }

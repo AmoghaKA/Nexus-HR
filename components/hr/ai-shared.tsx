@@ -206,9 +206,9 @@ export function ErrorBanner({ error }: { error: string }) {
   );
 }
 
-export function LoadingRow({ label }: { label: string }) {
+export function LoadingRow({ label, className }: { label: string; className?: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+    <div className={cn("flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground", className)}>
       <Sparkles className="h-4 w-4 animate-pulse text-primary" aria-hidden="true" />
       {label}
     </div>

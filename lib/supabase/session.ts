@@ -39,7 +39,17 @@ export async function updateSession(request: NextRequest) {
     .some((cookie) => cookie.name.startsWith("sb-"));
 
   if (!hasAuthCookie) {
-    if (isProtected) {
+    // Full page navigations (GET/HEAD) to protected routes redirect to
+    // sign-in so the user lands on the login screen deterministically.
+    //
+    // Non-GET requests (Server Actions and router PATCHes) must NOT be
+    // 307-redirected to /login: the client router expects a
+    // `text/x-component` (RSC) response and throws
+    // "An unexpected response was received from the server." (E394) when a
+    // followed redirect returns the login HTML page instead. Let those pass
+    // through — the Server Action or page render will report a missing
+    // session itself, and RLS keeps them empty.
+    if (isProtected && (request.method === "GET" || request.method === "HEAD")) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
     return response;
@@ -68,7 +78,30 @@ export async function updateSession(request: NextRequest) {
   const user = error ? null : data.user;
   const role = workspaceRoleFromUser(user);
 
-  if (user) {
+  const isNavigation = request.method === "GET" || request.method === "HEAD";
+
+  if (error && isNavigation && isProtected) {
+    // A session cookie exists but the token is expired/invalid. Do not let the
+    // request through — the signed-in-feeling dead end shows an empty page with
+    // a "sign in to view" notice. Drop the stale cookies and send the user to
+    // /login so they can re-authenticate cleanly.
+    const login = NextResponse.redirect(new URL("/login", request.url));
+    for (const cookie of request.cookies.getAll()) {
+      if (cookie.name.startsWith("sb-")) {
+        login.cookies.set(cookie.name, "", { maxAge: 0, path: "/" });
+      }
+    }
+    return login;
+  }
+
+  // Redirects are for page navigations only. Server Actions (POST) and router
+  // PATCHes must be answered with `text/x-component`, so hard-redirecting them
+  // (e.g. fetching an action on /login right after sign-in, when the fresh
+  // session cookie makes the user "signed in on a public page") makes the
+  // client router throw "An unexpected response was received from the server."
+  // Let non-navigation requests through; the action is always a client-side
+  // roundtrip that reports its own result.
+  if (user && isNavigation) {
     // Signed-in users should not be on public-only pages — send them to the
     // correct dashboard based on their persisted role.
     if (isPublic) {

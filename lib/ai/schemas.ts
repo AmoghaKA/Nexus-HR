@@ -102,6 +102,40 @@ export interface OnboardingPlan {
   confidence: number;
 }
 
+export type OnboardingProgressStatus = "on_track" | "at_risk" | "behind" | "blocked";
+
+export interface OnboardingProgressInsight {
+  headline: string;
+  summary: string;
+  status: OnboardingProgressStatus;
+  completed_pct: number;
+  days_since_start: number;
+  total_tasks: number;
+  completed: number;
+  pending: number;
+  overdue: number;
+  blocked: number;
+  issue: string;
+  recommendation: string;
+  prescribed_actions: string[];
+  confidence: number;
+}
+
+export interface SkillFocusNote {
+  skill: string;
+  rationale: string;
+  recommended_action: string;
+}
+
+export interface WorkforceSkillsAnalysis {
+  headline: string;
+  overall_assessment: string;
+  top_finding: string;
+  focus: SkillFocusNote[];
+  recommended_actions: string[];
+  confidence: number;
+}
+
 export interface CandidateRanking {
   candidate_name: string;
   job_title: string;
@@ -436,6 +470,48 @@ export const onboardingPlanSchema: Schema = obj(
     confidence: num("Model confidence between 0 and 1"),
   },
   ["headline", "expected_time_to_productivity_weeks", "phases", "confidence"]
+);
+
+export const onboardingProgressSchema: Schema = obj(
+  "Adaptive onboarding progression assessment grounded in the tenant's tracked onboarding tasks, their statuses, and due dates.",
+  {
+    headline: str("One-line summary of the new hire's onboarding progression"),
+    summary: str("2-3 sentence plain-language assessment of the progression"),
+    status: strEnum("Overall progression status", ["on_track", "at_risk", "behind", "blocked"]),
+    completed_pct: num("Percentage of all onboarding tasks completed (must match the evidence)"),
+    days_since_start: integer("Days since the onboarding start date"),
+    total_tasks: integer("Total onboarding tasks"),
+    completed: integer("Tasks completed"),
+    pending: integer("Tasks pending and not yet overdue"),
+    overdue: integer("Pending tasks past their due date"),
+    blocked: integer("Tasks explicitly blocked"),
+    issue: str("The specific issue if not on track; otherwise 'None'"),
+    recommendation: str("The single most important next step for HR or the manager"),
+    prescribed_actions: arr("Concrete actions to get the new hire back on track", str("Action")),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  [
+    "headline", "summary", "status", "completed_pct", "days_since_start",
+    "total_tasks", "completed", "pending", "overdue", "blocked",
+    "issue", "recommendation", "prescribed_actions", "confidence",
+  ]
+);
+
+export const workforceSkillsSchema: Schema = obj(
+  "Workforce skill-graph analysis: how skill coverage and headcount gaps map to business readiness and hiring or upskilling decisions.",
+  {
+    headline: str("One-line summary of the workforce skill graph outlook"),
+    overall_assessment: str("2-3 sentence assessment of workforce skill coverage and its business impact"),
+    top_finding: str("The single most important finding from the coverage data"),
+    focus: arr("Per-skill focus notes", obj("Skill focus", {
+      skill: str("Exact skill name from the provided data"),
+      rationale: str("Why this skill's coverage matters"),
+      recommended_action: str("Upskill, hire, or training specific to this skill"),
+    }, ["skill", "rationale", "recommended_action"])),
+    recommended_actions: arr("Org-wide recommended actions", str("Recommended action")),
+    confidence: num("Model confidence between 0 and 1"),
+  },
+  ["headline", "overall_assessment", "top_finding", "focus", "recommended_actions", "confidence"]
 );
 
 export const candidateRankingSchema: Schema = obj(
@@ -886,6 +962,48 @@ export function normalizeOnboardingPlan(raw: Record<string, unknown>): Onboardin
         }),
       };
     }),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizeOnboardingProgress(raw: Record<string, unknown>): OnboardingProgressInsight {
+  const statuses: OnboardingProgressStatus[] = ["on_track", "at_risk", "behind", "blocked"];
+  const status = asString(raw.status).toLowerCase();
+  return {
+    headline: asString(raw.headline),
+    summary: asString(raw.summary),
+    status: statuses.includes(status as OnboardingProgressStatus)
+      ? (status as OnboardingProgressStatus)
+      : "at_risk",
+    completed_pct: Math.round(clamp(asNumber(raw.completed_pct), 0, 100) * 10) / 10,
+    days_since_start: Math.round(asNumber(raw.days_since_start)),
+    total_tasks: Math.round(asNumber(raw.total_tasks)),
+    completed: Math.round(asNumber(raw.completed)),
+    pending: Math.round(asNumber(raw.pending)),
+    overdue: Math.round(asNumber(raw.overdue)),
+    blocked: Math.round(asNumber(raw.blocked)),
+    issue: asString(raw.issue),
+    recommendation: asString(raw.recommendation),
+    prescribed_actions: asStringArray(raw.prescribed_actions),
+    confidence: asConfidence(raw.confidence),
+  };
+}
+
+export function normalizeWorkforceSkills(raw: Record<string, unknown>): WorkforceSkillsAnalysis {
+  const focus = Array.isArray(raw.focus) ? raw.focus : [];
+  return {
+    headline: asString(raw.headline),
+    overall_assessment: asString(raw.overall_assessment),
+    top_finding: asString(raw.top_finding),
+    focus: focus.map((f) => {
+      const row = (f ?? {}) as Record<string, unknown>;
+      return {
+        skill: asString(row.skill),
+        rationale: asString(row.rationale),
+        recommended_action: asString(row.recommended_action),
+      };
+    }),
+    recommended_actions: asStringArray(raw.recommended_actions),
     confidence: asConfidence(raw.confidence),
   };
 }

@@ -5,6 +5,7 @@ import { fetchMyOnboarding } from "@/lib/employee/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { OnboardingTasks } from "@/components/employee/onboarding/onboarding-tasks";
+import { AdaptiveOnboardingStatus } from "@/components/employee/onboarding/adaptive-status";
 import { SignInNotice } from "@/components/employee/sign-in-notice";
 
 export const metadata: Metadata = { title: "Onboarding" };
@@ -21,6 +22,7 @@ export default async function OnboardingPage() {
         description="Your ramp-up checklist: access, training, and first-project milestones."
         badge={<Badge variant="outline">Live data</Badge>}
       />
+      <AdaptiveOnboardingStatus />
       <OnboardingTasks plans={plans} />
     </div>
   );

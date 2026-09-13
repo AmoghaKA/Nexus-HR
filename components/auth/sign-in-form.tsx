@@ -71,27 +71,36 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
       if (data.user) {
         // The account's real role comes from the database — never from the
         // role card clicked on the login screen.
-        const result = await resolveUserRole(data.user.id);
-        if (!result.ok) {
-          await supabase.auth.signOut();
-          setLoading(false);
-          setNotice(`Sign-in failed: ${result.error}`);
-          return;
-        }
-        if (result.workspace !== role) {
-          await supabase.auth.signOut();
+        try {
+          const result = await resolveUserRole(data.user.id);
+          if (!result.ok) {
+            await supabase.auth.signOut();
+            setLoading(false);
+            setNotice(`Sign-in failed: ${result.error}`);
+            return;
+          }
+          if (result.workspace !== role) {
+            await supabase.auth.signOut();
+            setLoading(false);
+            setNotice(
+              `This account belongs to the ${roleLabels[result.workspace].toLowerCase()}. Go back, choose the "${roleLabels[result.workspace]}" option, and sign in there.`
+            );
+            return;
+          }
+          // Claims may have been repaired to match the database — refresh so the
+          // proxy's role check on the next request sees them. Non-fatal if the
+          // refresh is refused transiently; navigation proceeds regardless.
+          await supabase.auth.refreshSession().catch(() => null);
+          // Replace (not push) so the login page is not left in history, and
+          // skip the extra router.refresh() — the destination is a dynamic page
+          // that already re-fetches fresh data on soft navigation.
+          router.replace(roleDashboard[result.workspace]);
+        } catch (error) {
           setLoading(false);
           setNotice(
-            `This account belongs to the ${roleLabels[result.workspace].toLowerCase()}. Go back, choose the "${roleLabels[result.workspace]}" option, and sign in there.`
+            `Sign-in failed: ${error instanceof Error ? error.message : "Something went wrong."}`
           );
-          return;
         }
-        // Claims may have been repaired to match the database — refresh so the
-        // proxy's role check on the next request sees them.
-        await supabase.auth.refreshSession();
-        setLoading(false);
-        router.push(roleDashboard[result.workspace]);
-        router.refresh();
         return;
       }
 
