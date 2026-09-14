@@ -30,7 +30,7 @@ async function main() {
 
   const targets = users.filter(
     (u) =>
-      (u.email ?? "").toLowerCase().endsWith("@workforceiq.demo") &&
+      (u.email ?? "").toLowerCase().endsWith("@nexushr.demo") &&
       u.app_metadata?.role === "employee"
   );
 
@@ -52,7 +52,7 @@ async function main() {
 
   console.log(`Confirmed ${updated} employee account(s) (${failed} failed).`);
   if (updated) {
-    console.log("They can now sign in with password WorkforceIQ-Seed-2026! as employees.");
+    console.log("They can now sign in with password NexusHR-Seed-2026! as employees.");
   }
 }
 

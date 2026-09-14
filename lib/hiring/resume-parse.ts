@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Resume text extraction (server-side only).
-// Converts an uploaded resume file into plain text so the Gemini layer can
+// Converts an uploaded resume file into plain text so the Qwen engine can
 // build a structured candidate profile. Supports PDF, DOCX and plain text.
 // ---------------------------------------------------------------------------
 

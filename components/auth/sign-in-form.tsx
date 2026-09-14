@@ -130,7 +130,7 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
           <Badge variant="secondary">{roleLabels[role]}</Badge>
         </div>
         <CardDescription>
-          Sign in to your WorkforceIQ {roleLabels[role].toLowerCase()}.
+          Sign in to your Nexus HR {roleLabels[role].toLowerCase()}.
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
@@ -213,7 +213,7 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
       </CardContent>
       <CardFooter className="justify-center">
         <p className="text-sm text-muted-foreground">
-          New to WorkforceIQ?{" "}
+          New to Nexus HR?{" "}
           <Link
             href="/signup"
             className="font-medium text-primary hover:underline"

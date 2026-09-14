@@ -14,14 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-
-const severityDot: Record<string, string> = {
-  critical: "bg-destructive",
-  high: "bg-destructive",
-  medium: "bg-warning",
-  low: "bg-success",
-  info: "bg-muted-foreground",
-};
+import { InsightCard } from "@/components/hr/ai-shared";
 
 export function WorkforceBriefButton() {
   const [open, setOpen] = useState(false);
@@ -53,14 +46,14 @@ export function WorkforceBriefButton() {
             Workforce Brief
           </DialogTitle>
           <DialogDescription>
-            Live Supabase signals → Gemini reasoning → structured, explainable insights.
+            Live Supabase signals → Qwen reasoning → structured, explainable insights.
           </DialogDescription>
         </DialogHeader>
 
         {isPending && (
           <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Gathering signals and running Gemini…
+            Gathering signals and running Qwen…
           </div>
         )}
 
@@ -101,49 +94,7 @@ export function WorkforceBriefButton() {
 
             <div className="space-y-3">
               {result.insights.map((insight, index) => (
-                <div key={`${insight.title}-${index}`} className="rounded-lg border bg-card/60 p-4">
-                  <div className="flex items-start gap-2">
-                    <span
-                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${severityDot[insight.severity] ?? "bg-muted-foreground"}`}
-                      aria-hidden="true"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold leading-snug">{insight.title}</p>
-                        <Badge variant="outline" className="ml-auto shrink-0">
-                          {Math.round(insight.confidence * 100)}% confidence
-                        </Badge>
-                      </div>
-                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                        {insight.summary}
-                      </p>
-                    </div>
-                  </div>
-
-                  {insight.evidence.length > 0 && (
-                    <ul className="mt-2.5 space-y-1">
-                      {insight.evidence.map((item) => (
-                        <li key={item} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                          <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {insight.reasoning && (
-                    <p className="mt-2.5 border-l-2 border-muted pl-3 text-xs leading-relaxed text-muted-foreground">
-                      <span className="font-medium text-card-foreground">Why: </span>
-                      {insight.reasoning}
-                    </p>
-                  )}
-
-                  {insight.recommended_action && (
-                    <p className="mt-2.5 text-xs font-medium text-primary">
-                      {insight.recommended_action}
-                    </p>
-                  )}
-                </div>
+                <InsightCard key={`${insight.title}-${index}`} insight={insight} index={index} />
               ))}
             </div>
 

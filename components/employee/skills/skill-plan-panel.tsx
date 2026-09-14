@@ -6,10 +6,11 @@ import type { SkillPlanActionResult } from "@/lib/ai/actions";
 import { recommendSkillPlan } from "@/lib/ai/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { useAiRun } from "@/components/hr/ai-run";
 import {
+  AiAnswerFrame,
+  AiResultCard,
   BulletList,
   ConfidenceBadge,
   ErrorBanner,
@@ -67,64 +68,73 @@ function ReportView({
   persistError?: string;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Badge variant="outline">
-          <Sparkles className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-          AI Skill Plan
-        </Badge>
-        <Badge variant="secondary">{Math.round(plan.overall_coverage_pct)}% coverage</Badge>
-        <ConfidenceBadge confidence={plan.confidence} />
-        <PersistenceBadges saved={saved} persistError={persistError} noun="insight saved" />
-      </div>
+    <AiAnswerFrame
+      title="AI Skill Plan"
+      icon={<Sparkles className="h-3 w-3" aria-hidden="true" />}
+      badges={
+        <>
+          <Badge variant="secondary">{Math.round(plan.overall_coverage_pct)}% coverage</Badge>
+          <ConfidenceBadge confidence={plan.confidence} />
+          <PersistenceBadges saved={saved} persistError={persistError} noun="insight saved" />
+        </>
+      }
+      headline={plan.headline}
+    >
+      {plan.recommendations.map((rec, i) => (
+        <AiResultCard
+          key={rec.skill}
+          index={i}
+          icon={
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Compass className="h-5 w-5" aria-hidden="true" />
+            </span>
+          }
+        >
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold">{rec.skill}</span>
+              <Badge variant={GAP_VARIANT[rec.gap]}>{rec.gap} gap</Badge>
+              <Badge variant={PRIORITY_VARIANT[rec.priority]}>priority: {rec.priority}</Badge>
+              {rec.career_paths.length > 0 && (
+                <Badge variant="outline" className="bg-card text-muted-foreground">
+                  {rec.career_paths[0]}
+                  {rec.career_paths.length > 1 ? ` +${rec.career_paths.length - 1}` : ""}
+                </Badge>
+              )}
+            </div>
 
-      <p className="text-sm leading-relaxed text-muted-foreground">{plan.headline}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Proficiency
+                </p>
+                <ProgressBar
+                  value={(rec.current_proficiency / 5) * 100}
+                  size="sm"
+                  tone="primary"
+                  label={`${rec.current_proficiency} → ${rec.target_proficiency} / 5`}
+                />
+              </div>
+            </div>
 
-      {plan.recommendations.map((rec) => (
-        <Card key={rec.skill} className="p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold">{rec.skill}</span>
-            <Badge variant={GAP_VARIANT[rec.gap]}>{rec.gap} gap</Badge>
-            <Badge variant={PRIORITY_VARIANT[rec.priority]}>priority: {rec.priority}</Badge>
-            {rec.career_paths.length > 0 && (
-              <Badge variant="outline" className="bg-card text-muted-foreground">
-                {rec.career_paths[0]}
-                {rec.career_paths.length > 1 ? ` +${rec.career_paths.length - 1}` : ""}
-              </Badge>
-            )}
-          </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">{rec.rationale}</p>
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Proficiency
-              </p>
-              <ProgressBar
-                value={(rec.current_proficiency / 5) * 100}
-                size="sm"
-                tone="primary"
-                label={`${rec.current_proficiency} → ${rec.target_proficiency} / 5`}
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Courses
+                </p>
+                <BulletList items={rec.courses} tone="muted" empty="No specific course yet." />
+              </div>
+              <div>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Projects to build
+                </p>
+                <BulletList items={rec.projects} tone="muted" empty="None listed." />
+              </div>
             </div>
           </div>
-
-          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{rec.rationale}</p>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Courses
-              </p>
-              <BulletList items={rec.courses} tone="muted" empty="No specific course yet." />
-            </div>
-            <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Projects to build
-              </p>
-              <BulletList items={rec.projects} tone="muted" empty="None listed." />
-            </div>
-          </div>
-        </Card>
+        </AiResultCard>
       ))}
 
       {plan.recommendations.length === 0 && (
@@ -133,6 +143,6 @@ function ReportView({
 
       <RecommendedActions actions={plan.recommendations.map((r) => `${r.skill}: ${r.projects[0] ?? r.courses[0] ?? "start practicing this month"}`)} />
       <AiDisclaimer />
-    </div>
+    </AiAnswerFrame>
   );
 }

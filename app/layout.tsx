@@ -15,12 +15,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "WorkforceIQ",
-    template: "%s | WorkforceIQ",
+    default: "Nexus HR",
+    template: "%s | Nexus HR",
   },
   description:
     "AI-powered intelligence for every stage of the employee lifecycle.",
-  applicationName: "WorkforceIQ",
+  applicationName: "Nexus HR",
   keywords: [
     "workforce",
     "HR",

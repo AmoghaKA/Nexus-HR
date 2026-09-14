@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- WorkforceIQ — seed data (idempotent, safe to re-run)
+-- Nexus HR — seed data (idempotent, safe to re-run)
 -- ---------------------------------------------------------------------------
 -- Departments, job roles, skills, training catalog, and a starter policy set.
 -- Demo *users* (auth + profiles + employees) are created by
@@ -58,8 +58,8 @@ on conflict (name) do nothing;
 
 -- Training catalog
 insert into public.training_courses (title, code, description, category, difficulty, duration_hours, provider, is_mandatory) values
-  ('Security Awareness 2026',     'SEC-101', 'Data protection, phishing and password hygiene.',  'security',   'beginner',     2,   'WorkforceIQ Academy', true),
-  ('Unconscious Bias at Work',    'HR-201',  'Inclusive behaviours and bias mitigation.',         'inclusion',  'beginner',     1.5, 'WorkforceIQ Academy', true),
+  ('Security Awareness 2026',     'SEC-101', 'Data protection, phishing and password hygiene.',  'security',   'beginner',     2,   'Nexus HR Academy', true),
+  ('Unconscious Bias at Work',    'HR-201',  'Inclusive behaviours and bias mitigation.',         'inclusion',  'beginner',     1.5, 'Nexus HR Academy', true),
   ('Rising Leader Program',       'LD-301',  'First-time people management foundations.',          'leadership', 'intermediate', 8,   'Internal',            false),
   ('SQL for Product Decisions',   'AN-401',  'Querying data to inform product choices.',           'analytics',  'intermediate', 6,   'DataCamp',            false),
   ('Advanced Performance Reviews','HR-402',  'Running fair, evidence-based reviews.',              'hr',         'advanced',     4,   'Internal',            false),
@@ -70,7 +70,7 @@ on conflict (code) do nothing;
 insert into public.policies (title, slug, category, status, version, content, created_by) values
   ('Code of Conduct',
    'code-of-conduct', 'conduct', 'published', 1,
-   'Everyone at WorkforceIQ is expected to act with integrity, respect and accountability.' || chr(10) ||
+   'Everyone at Nexus HR is expected to act with integrity, respect and accountability.' || chr(10) ||
    'We promote a safe, inclusive environment and take all reports of misconduct seriously.',
    null),
   ('Attendance and Leave Policy',
@@ -90,7 +90,7 @@ insert into public.policy_chunks (policy_id, chunk_index, content, character_cou
 select p.id, c.chunk_index, c.content, length(c.content)
 from public.policies p
 join (values
-  ('code-of-conduct', 0, 'WorkforceIQ Code of Conduct: act with integrity, respect and accountability.'),
+  ('code-of-conduct', 0, 'Nexus HR Code of Conduct: act with integrity, respect and accountability.'),
   ('code-of-conduct', 1, 'We promote a safe, inclusive environment and take all reports of misconduct seriously.'),
   ('attendance-and-leave', 0, 'Leave types: annual, sick, maternity, paternity, bereavement, unpaid and other.'),
   ('attendance-and-leave', 1, 'Submit leave requests through the employee workspace; approvals are recorded against your record.'),

@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- WorkforceIQ — Row Level Security, views, storage, grants (migration 0002)
+-- Nexus HR — Row Level Security, views, storage, grants (migration 0002)
 -- ---------------------------------------------------------------------------
 -- Run AFTER 0001_schema.sql. Everything here depends on the helper functions
 -- and tables created in 0001.

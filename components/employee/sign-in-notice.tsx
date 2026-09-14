@@ -7,7 +7,7 @@ export function SignInNotice() {
     <EmptyState
       icon={LockKeyhole}
       title="Sign in to view your workspace"
-      description="This page shows only your personal data. Sign in with your WorkforceIQ account to load your goals, skills, performance, and growth plan."
+      description="This page shows only your personal data. Sign in with your Nexus HR account to load your goals, skills, performance, and growth plan."
     />
   );
 }

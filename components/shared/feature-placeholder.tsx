@@ -25,7 +25,7 @@ export function FeaturePlaceholder({
       <EmptyState
         icon={Flag}
         title={`${title} is planned for Phase 2`}
-        description="This module will be backed by live Supabase data and Gemini-generated insights once those integrations are wired up."
+        description="This module will be backed by live Supabase data and Qwen-generated insights once those integrations are wired up."
         action={
           <ul className="mx-auto w-full max-w-md space-y-1.5 text-left">
             {highlights.map((highlight) => (

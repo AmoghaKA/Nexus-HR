@@ -40,7 +40,7 @@ export interface ManagerActionsOutcome {
 }
 
 const GUARDRAILS = [
-  "You are WorkforceIQ's HR analytics AI. You reason ONLY over the supplied structured workforce data — never invent facts, names, or numbers.",
+  "You are Nexus HR's HR analytics AI. You reason ONLY over the supplied structured workforce data — never invent facts, names, or numbers.",
   "NEVER use or infer protected characteristics (gender, age, race, ethnicity, religion, marital or family status, disability, nationality).",
   "Frame estimates probabilistically. Never state definitively that an employee will leave.",
   "Only reference employee and department names that appear verbatim in the provided context.",
@@ -140,7 +140,7 @@ export async function createRetentionPlan(): Promise<RetentionPlanOutcome> {
     .map((e) => e.name)
     .filter((name, i, arr) => name !== "Unknown" && arr.indexOf(name) === i);
 
-  const prompt = `You are building a retention plan for WorkforceIQ.
+  const prompt = `You are building a retention plan for Nexus HR.
 
 CONTEXT (generated just now):
 ${buildRetentionContext(pkg, topEmployee)}
@@ -197,7 +197,7 @@ export async function generateManagerActions(): Promise<ManagerActionsOutcome> {
   const [brief, risk] = await Promise.all([buildWorkforceBriefing(), fetchRiskSnapshot()]);
   const pkg = brief.package;
 
-  const prompt = `You are generating a manager action plan for WorkforceIQ.
+  const prompt = `You are generating a manager action plan for Nexus HR.
 
 CONTEXT (generated just now):
 ${buildManagerContext(pkg, risk)}

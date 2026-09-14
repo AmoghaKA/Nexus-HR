@@ -318,11 +318,11 @@ export default async function ReportsPage() {
       </section>
 
       <section className="space-y-4">
-        <SectionHeading title="How WorkforceIQ Thinks" />
+        <SectionHeading title="How Nexus HR Thinks" />
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {[
             { icon: Layers, label: "HR data ingested", detail: "Recruitment, onboarding, performance, goals, skills, attendance, policies" },
-            { icon: Radar, label: "Signal detection", detail: "Each domain is scored independently by Gemini" },
+            { icon: Radar, label: "Signal detection", detail: "Each domain is scored independently by Qwen" },
             { icon: BrainCircuit, label: "Cross-domain reasoning", detail: "Signals are connected to reflect real workforce complexity" },
             { icon: Sparkles, label: "Explainable output", detail: "Every insight carries evidence, reasoning and confidence" },
             { icon: ListChecks, label: "Actionable next steps", detail: "Concrete recommendations at employee, team and org level" },

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type React from "react";
 import Link from "next/link";
-import { ArrowRight, Bot, Building2, Mail, MapPin, User, Briefcase } from "lucide-react";
+import { ArrowRight, Bot, Building2, Mail, MapPin, Briefcase, ShieldCheck, CalendarDays, UserCog } from "lucide-react";
 
 import { getEmployeeContext } from "@/lib/employee/data";
 
@@ -10,6 +10,7 @@ import { ErrorState } from "@/components/shared/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ProfileEditForm } from "@/components/employee/profile-edit-form";
 
 export const metadata: Metadata = { title: "My Profile" };
 export const dynamic = "force-dynamic";
@@ -70,13 +71,13 @@ export default async function ProfilePage() {
         description="Your personal details, team and reporting line."
         badge={
           <Badge variant="secondary">
-            <User className="mr-1 h-3 w-3" aria-hidden="true" />
+            <UserCog className="mr-1 h-3 w-3" aria-hidden="true" />
             {ctx.employeeCode}
           </Badge>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+      <div className="sr-fade sr-fade-d1 grid gap-6 lg:grid-cols-[280px_1fr]">
         <Card className="flex flex-col items-center p-6 text-center">
           <Avatar className="h-20 w-20 text-lg">
             <AvatarImage src={ctx.avatarUrl ?? undefined} alt={ctx.name} />
@@ -105,16 +106,19 @@ export default async function ProfilePage() {
         </Card>
 
         <Card className="p-6">
-          <h3 className="text-sm font-semibold">Personal details</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Personal details</h3>
+            <ProfileEditForm location={ctx.location} />
+          </div>
           <div className="mt-4 space-y-5">
-            <Row icon={User} label="Full name" value={ctx.name} />
+            <Row icon={Building2} label="Full name" value={ctx.name} />
             <Row icon={Mail} label="Email" value={ctx.email} />
             <Row icon={Building2} label="Department" value={ctx.department} />
             <Row icon={Briefcase} label="Role" value={ctx.role} />
             <Row icon={MapPin} label="Location" value={ctx.location} />
-            <Row icon={User} label="Manager" value={ctx.managerName} />
-            <Row icon={User} label="Employment status" value={ctx.status} />
-            <Row icon={User} label="Date joined" value={ctx.joined ? new Date(ctx.joined).toLocaleDateString() : null} />
+            <Row icon={UserCog} label="Manager" value={ctx.managerName} />
+            <Row icon={ShieldCheck} label="Employment status" value={ctx.status} />
+            <Row icon={CalendarDays} label="Date joined" value={ctx.joined ? new Date(ctx.joined).toLocaleDateString() : null} />
           </div>
         </Card>
       </div>

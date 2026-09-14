@@ -38,7 +38,7 @@ export default async function PerformancePage() {
         badge={<Badge variant="outline">Live data</Badge>}
       />
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d1 space-y-4">
         <SectionHeading title="Performance Trend" />
         <ChartCard title="Rating over time" description="Your ratings across review cycles">
           {trend.length > 0 ? (
@@ -52,27 +52,27 @@ export default async function PerformancePage() {
         </ChartCard>
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d2 space-y-4">
         <SectionHeading title="AI Performance Coach" />
         <Card className="p-5">
           <PerformanceCoachPanel />
         </Card>
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d3 space-y-4">
         <SectionHeading title="Review History" />
         <ReviewHistory reviews={data.reviews} />
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d4 space-y-4">
         <SectionHeading title="Feedback" />
         <FeedbackList feedback={data.feedback} />
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d5 space-y-4">
         <SectionHeading title="Attendance" />
         <Card className="p-5">
-          <AttendanceSummary rate={data.attendanceRate} recent={[]} />
+          <AttendanceSummary rate={data.attendanceRate} recent={data.recentAttendance} />
         </Card>
       </section>
     </div>

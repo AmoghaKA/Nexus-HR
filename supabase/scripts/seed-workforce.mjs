@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// WorkforceIQ — realistic workforce seed
+// Nexus HR — realistic workforce seed
 // ---------------------------------------------------------------------------
 // Creates ~100 employees with internally-consistent HR data so every dashboard
 // metric, chart, and AI pattern has real Supabase backing.
@@ -58,7 +58,7 @@ function hashId(seed) {
 }
 
 const emailOf = (spec) =>
-  `${spec.first}.${spec.last}${spec.emailSuffix ?? ""}@workforceiq.demo`.replace(/ /g, ".").toLowerCase();
+  `${spec.first}.${spec.last}${spec.emailSuffix ?? ""}@nexushr.demo`.replace(/ /g, ".").toLowerCase();
 
 // ---------------------------------------------------------------------------
 // Reference data
@@ -231,7 +231,7 @@ async function ensureReferenceData() {
       difficulty,
       duration_hours: hours,
       is_mandatory: mandatory,
-      provider: "WorkforceIQ Academy",
+      provider: "Nexus HR Academy",
     })),
     "code"
   );
@@ -263,7 +263,7 @@ async function ensureProfiles(specs) {
     if (existingByEmail.has(email)) continue;
     const { data, error } = await supabase.auth.admin.createUser({
       email,
-      password: "WorkforceIQ-Seed-2026!",
+      password: "NexusHR-Seed-2026!",
       email_confirm: true,
       user_metadata: { full_name: `${spec.first} ${spec.last}`, role: "employee" },
       app_metadata: { role: "employee" },
@@ -363,7 +363,7 @@ function buildEmployeeSpecs() {
       let first = pick(FIRST_NAMES);
       let last = pick(LAST_NAMES);
       let emailSuffix = "";
-      let base = `${first}.${last}@workforceiq.demo`.replace(/ /g, ".").toLowerCase();
+      let base = `${first}.${last}@nexushr.demo`.replace(/ /g, ".").toLowerCase();
       let n = 2;
       while (usedEmails.has(base + emailSuffix)) {
         emailSuffix = `.${n}`;

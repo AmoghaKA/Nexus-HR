@@ -1,4 +1,5 @@
 import type { EmployeeReview } from "@/lib/hr/directory";
+import { capitalize, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/empty-state";
 
@@ -56,16 +57,10 @@ export function ReviewHistory({ reviews }: { reviews: EmployeeReview[] }) {
   );
 }
 
-function capitalize(value: string): string {
-  return value ? value[0].toUpperCase() + value.slice(1) : value;
-}
-
 function periodLabel(start: string | null, end: string | null): string {
   const fmt = (value: string | null) => {
     if (!value) return "n/a";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-    return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    return formatDate(value, { month: "short", year: "numeric" });
   };
   return `${fmt(start)} – ${fmt(end)}`;
 }

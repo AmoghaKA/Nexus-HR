@@ -120,8 +120,8 @@ function RetentionDetail({ result }: { result: CreateRetentionPlanActionResult }
             Employee attention plans
           </p>
           <ul className="space-y-1.5">
-            {plan.at_risk_employees.map((emp) => (
-            <li key={emp.name} className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2">
+            {plan.at_risk_employees.map((emp, i) => (
+            <li key={`${emp.name}-${i}`} className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" aria-hidden="true" />
                 <span className="text-xs leading-relaxed text-card-foreground">
                   <span className="font-semibold">{emp.name}</span>
@@ -243,12 +243,12 @@ export function CommandCenterActions() {
               {dialog?.id === "retention" ? "Retention Plan" : "Manager Actions"}
             </DialogTitle>
             <DialogDescription>
-              Live Supabase signals → Gemini reasoning → structured, persisted plan.
+              Live Supabase signals → Qwen reasoning → structured, persisted plan.
             </DialogDescription>
           </DialogHeader>
 
           {aiState.status === "pending" && (
-            <LoadingRow label="Gathering signals and running Gemini…" />
+            <LoadingRow label="Gathering signals and running Qwen…" />
           )}
 
           {aiState.status === "retention" && <RetentionDetail result={aiState.result} />}

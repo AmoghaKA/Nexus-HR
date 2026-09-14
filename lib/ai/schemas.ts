@@ -3,15 +3,15 @@ import { SchemaType, type Schema } from "@google/generative-ai";
 // ---------------------------------------------------------------------------
 // Structured output contracts
 //
-// Every Gemini feature is forced to return one of these shapes (JSON schema,
-// requested via responseSchema + responseMimeType). Types mirror the on-wire
-// schema and validators coerce/malformed safely so nothing downstream receives
-// raw model output.
+// Every AI feature (Qwen primary) is forced to return one of these shapes
+// (JSON schema, requested via responseSchema + responseMimeType). Types mirror
+// the on-wire schema and validators coerce/malformed safely so nothing
+// downstream receives raw model output.
 // ---------------------------------------------------------------------------
 
 export type InsightSeverity = "low" | "medium" | "high" | "critical";
 
-export interface GeminiInsight {
+export interface InsightOutput {
   title: string;
   severity: InsightSeverity;
   summary: string;
@@ -32,7 +32,7 @@ export interface EmployeeAnalysis {
   engagement_signals: string[];
   risk_signals: string[];
   recommended_actions: string[];
-  insights: GeminiInsight[];
+  insights: InsightOutput[];
   confidence: number;
 }
 
@@ -346,7 +346,7 @@ export interface EmployeeBrief {
   focus_areas: EmployeeBriefFocusArea[];
   recommended_action: string;
   confidence: number;
-  insights: GeminiInsight[];
+  insights: InsightOutput[];
 }
 
 export interface SharpenedGoalMilestone {
@@ -407,7 +407,7 @@ export interface LearningPlan {
 }
 
 // ---------------------------------------------------------------------------
-// Gemini schema helpers
+// Structured-output schema helpers
 // ---------------------------------------------------------------------------
 
 function str(description: string): Schema {
@@ -991,7 +991,7 @@ function asSeverity(value: unknown): InsightSeverity {
     : "medium";
 }
 
-export function normalizeInsight(raw: Record<string, unknown>): GeminiInsight | null {
+export function normalizeInsight(raw: Record<string, unknown>): InsightOutput | null {
   const title = asString(raw.title);
   const summary = asString(raw.summary);
   if (!title || !summary) return null;
@@ -1009,14 +1009,14 @@ export function normalizeInsight(raw: Record<string, unknown>): GeminiInsight | 
 }
 
 /** Accepts `{ insights: [...] }` or a bare array. */
-export function normalizeInsights(payload: unknown): GeminiInsight[] {
+export function normalizeInsights(payload: unknown): InsightOutput[] {
   const records = Array.isArray(payload)
     ? payload
     : Array.isArray((payload as { insights?: unknown })?.insights)
       ? (payload as { insights: unknown[] }).insights
       : [];
   const seen = new Set<string>();
-  const out: GeminiInsight[] = [];
+  const out: InsightOutput[] = [];
   for (const record of records) {
     if (!record || typeof record !== "object") continue;
     const insight = normalizeInsight(record as Record<string, unknown>);
@@ -1281,14 +1281,23 @@ export function normalizeInterviewInsight(raw: Record<string, unknown>): Intervi
 
 export function normalizePolicyAnswer(raw: Record<string, unknown>): PolicyAnswer {
   const citations = Array.isArray(raw.citations) ? raw.citations : [];
+  const seen = new Set<string>();
+  const clean: { policy: string; section: string }[] = [];
+  for (const c of citations) {
+    const row = (c ?? {}) as Record<string, unknown>;
+    const policy = asString(row.policy);
+    const section = asString(row.section);
+    if (!policy && !section) continue;
+    const key = `${policy}\u0000${section}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    clean.push({ policy, section });
+  }
   return {
     answer: asString(raw.answer),
     explanation: asString(raw.explanation),
     confidence: asConfidence(raw.confidence),
-    citations: citations.map((c) => {
-      const row = (c ?? {}) as Record<string, unknown>;
-      return { policy: asString(row.policy), section: asString(row.section) };
-    }),
+    citations: clean,
     disclaimer: asString(raw.disclaimer),
   };
 }

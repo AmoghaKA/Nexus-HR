@@ -5,7 +5,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 export const metadata: Metadata = {
   title: {
     default: "Welcome",
-    template: "%s | WorkforceIQ",
+    template: "%s | Nexus HR",
   },
 };
 

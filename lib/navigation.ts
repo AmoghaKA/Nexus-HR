@@ -99,13 +99,13 @@ export const employeeNav: NavGroup[] = [
 
 export const hrUser: DashboardUser = {
   name: "Alex Morgan",
-  email: "alex.morgan@workforceiq.io",
+  email: "alex.morgan@nexushr.io",
   role: "People Operations",
 };
 
 export const employeeUser: DashboardUser = {
   name: "Sam Rivera",
-  email: "sam.rivera@workforceiq.io",
+  email: "sam.rivera@nexushr.io",
   role: "Senior Frontend Engineer",
 };
 

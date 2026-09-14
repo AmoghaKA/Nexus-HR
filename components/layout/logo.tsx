@@ -62,7 +62,7 @@ export function Logo({
               "font-semibold tracking-tight text-foreground"
             )}
           >
-            Workforce<span className="text-primary">IQ</span>
+            Nexus<span className="text-primary">HR</span>
           </span>
           <span className="mt-0.5 hidden text-[10px] font-medium uppercase tracking-widest text-muted-foreground sm:block">
             People intelligence

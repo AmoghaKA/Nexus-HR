@@ -1,5 +1,14 @@
 import * as React from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Minus, ShieldAlert, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  Lightbulb,
+  Minus,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -45,10 +54,10 @@ export function LevelDot({ level, className }: { level: Level; className?: strin
   );
 }
 
-export function ConfidenceBadge({ confidence }: { confidence?: number }) {
+export function ConfidenceBadge({ confidence, className }: { confidence?: number; className?: string }) {
   if (typeof confidence !== "number") return null;
   return (
-    <Badge variant="outline" className="bg-card">
+    <Badge variant="outline" className={cn("bg-card", className)}>
       {Math.round(confidence * 100)}% confidence
     </Badge>
   );
@@ -106,8 +115,8 @@ export function BulletList({
   }
   return (
     <ul className="space-y-1.5">
-      {items.map((item) => (
-        <li key={item} className="flex items-start gap-2 text-sm leading-relaxed text-card-foreground">
+      {items.map((item, i) => (
+        <li key={`${item}-${i}`} className="flex items-start gap-2 text-sm leading-relaxed text-card-foreground">
           <span
             className={cn(
               "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
@@ -149,17 +158,91 @@ export function SectionCard({
 export function RecommendedActions({ actions }: { actions: string[] }) {
   if (actions.length === 0) return null;
   return (
-    <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/[0.04] p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Recommended actions</p>
-      <ul className="space-y-1.5">
-        {actions.map((action) => (
-          <li key={action} className="flex items-start gap-2 text-sm text-card-foreground">
-            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+    <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-primary">
+        <Lightbulb className="h-3.5 w-3.5" aria-hidden="true" />
+        Recommended actions
+      </p>
+      <ul className="mt-2.5 space-y-2">
+        {actions.map((action, i) => (
+          <li key={`${action}-${i}`} className="flex items-start gap-2.5 text-sm leading-relaxed text-card-foreground">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
             {action}
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+export function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+export function AiAnswerFrame({
+  title,
+  icon,
+  badges,
+  headline,
+  children,
+  className,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  badges?: React.ReactNode;
+  headline?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("overflow-hidden rounded-2xl rounded-tl-sm border bg-card shadow-sm", className)}>
+      <div className="flex flex-wrap items-center gap-2 border-b bg-gradient-to-r from-primary/[0.07] via-indigo-500/[0.05] to-transparent px-4 py-2.5">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-violet-500 px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm">
+          {icon}
+          {title}
+        </span>
+        {badges}
+      </div>
+      <div className="space-y-4 p-4 sm:p-5">
+        {headline && <p className="text-[15px] leading-relaxed text-card-foreground">{headline}</p>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function AiResultCard({
+  icon,
+  children,
+  className,
+  index,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  index?: number;
+}) {
+  return (
+    <Card
+      className={cn(
+        "group relative overflow-hidden border bg-card/80 transition-shadow hover:shadow-md",
+        index != null && `sr-fade sr-fade-d${Math.min(index + 1, 6)}`,
+        className
+      )}
+    >
+      <div
+        className="h-1 w-full bg-gradient-to-r from-primary via-indigo-500 to-violet-500 opacity-70 transition-opacity group-hover:opacity-100"
+        aria-hidden="true"
+      />
+      <div className="flex items-start gap-3 p-4">
+        {icon}
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+    </Card>
   );
 }
 
@@ -221,5 +304,137 @@ export function EmptyAnalytics({ headline, detail }: { headline: string; detail:
       <p className="font-medium text-card-foreground">{headline}</p>
       <p className="mt-1 text-xs">{detail}</p>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Premium "AI insight / explanation" card used by the brief, employee analysis,
+// and any feature that renders an InsightOutput-shaped entity.
+// ---------------------------------------------------------------------------
+
+export interface InsightStatement {
+  title: string;
+  severity?: string;
+  summary: string;
+  evidence?: string[];
+  reasoning?: string;
+  confidence?: number;
+  recommended_action?: string;
+}
+
+const severityPillStyle: Record<string, string> = {
+  critical: "bg-destructive/10 text-destructive",
+  high: "bg-destructive/10 text-destructive",
+  medium: "bg-warning/15 text-warning",
+  low: "bg-success/15 text-success",
+};
+
+const severityDotStyle: Record<string, string> = {
+  critical: "bg-destructive",
+  high: "bg-destructive",
+  medium: "bg-warning",
+  low: "bg-success",
+};
+
+export function SeverityPill({ severity }: { severity?: string }) {
+  const tone = severityPillStyle[severity ?? ""] ?? "bg-muted text-muted-foreground";
+  const dot = severityDotStyle[severity ?? ""] ?? "bg-muted-foreground";
+  const label = severity ?? "info";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize",
+        tone
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+export function InsightCard({
+  insight,
+  index,
+  className,
+}: {
+  insight: InsightStatement;
+  index?: number;
+  className?: string;
+}) {
+  const hasEvidence = insight.evidence && insight.evidence.length > 0;
+  return (
+    <Card
+      className={cn(
+        "group relative overflow-hidden border bg-card/80 transition-shadow hover:shadow-md",
+        index != null && `sr-fade sr-fade-d${Math.min(index + 1, 6)}`,
+        className
+      )}
+    >
+      <div
+        className="h-1 w-full bg-gradient-to-r from-primary via-indigo-500 to-violet-500 transition-opacity opacity-70 group-hover:opacity-100"
+        aria-hidden="true"
+      />
+      <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
+        <SeverityPill severity={insight.severity} />
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          AI Insight
+        </span>
+        {typeof insight.confidence === "number" && (
+          <ConfidenceBadge confidence={insight.confidence} className="ml-auto" />
+        )}
+      </div>
+
+      <div className="space-y-3.5 px-5 pb-5 pt-3">
+        <div>
+          <h4 className="text-[15px] font-semibold leading-snug tracking-tight text-card-foreground">
+            {insight.title}
+          </h4>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{insight.summary}</p>
+        </div>
+
+        {hasEvidence && (
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            {insight.evidence!.slice(0, 4).map((item, i) => (
+              <div
+                key={`${item}-${i}`}
+                className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs leading-relaxed text-card-foreground"
+              >
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                {item}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {insight.reasoning && (
+          <div className="flex items-start gap-2.5 rounded-xl border border-primary/15 bg-primary/[0.03] px-3.5 py-3">
+            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+              <Lightbulb className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-card-foreground">Why: </span>
+              {insight.reasoning}
+            </p>
+          </div>
+        )}
+
+        {insight.recommended_action && (
+          <div className="flex items-start gap-2.5 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/[0.06] to-primary/[0.02] px-3.5 py-3">
+            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+              <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                Recommended action
+              </p>
+              <p className="text-sm font-medium leading-snug text-card-foreground">
+                {insight.recommended_action}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

@@ -1,4 +1,5 @@
 import type { EmployeeFeedback } from "@/lib/hr/directory";
+import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/shared/empty-state";
 
@@ -43,8 +44,3 @@ export function FeedbackList({ feedback }: { feedback: EmployeeFeedback[] }) {
   );
 }
 
-function formatDate(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}

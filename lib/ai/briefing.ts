@@ -12,7 +12,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 // Workforce data package
 //
 // This is the *summarized, structured* payload that will later be sent to
-// Gemini so the model can compose narrative briefings. It is intentionally
+// Qwen so the model can compose narrative briefings. It is intentionally
 // NOT raw database rows — trends, deltas, and rollups are computed here.
 // ---------------------------------------------------------------------------
 
@@ -767,15 +767,15 @@ function severityRank(s: InsightSeverity | RiskLevel | undefined): number {
 }
 
 // ---------------------------------------------------------------------------
-// Gemini handoff (backend service — model call comes next)
+// Qwen handoff (backend service — model call comes next)
 // ---------------------------------------------------------------------------
 
 /**
  * Renders the structured workforce package into a prompt-shaped brief that the
- * Gemini service will send. Intentionally summarized, not raw rows.
+ * Qwen engine will send. Intentionally summarized, not raw rows.
  */
 export function prepareBriefingPrompt(pkg: WorkforceDataPackage): string {
-  return `You are the WorkforceIQ HR analytics assistant.\n
+  return `You are the Nexus HR HR analytics assistant.\n
 Here is a structured summary of workforce signals. Compose a concise, executive-friendly briefing in plain language.\n
 Generated at: ${pkg.generatedAt}\n
 

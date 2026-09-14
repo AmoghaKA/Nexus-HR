@@ -17,7 +17,7 @@ import { fetchRecruitmentData, type RecruitmentData } from "@/lib/hr/recruitment
 //   1. Classify the question into an intent (deterministic keyword rules).
 //   2. Load ONLY the data relevant to that intent from Supabase.
 //   3. Build a compact, structured signal package (numbers first, names exact).
-//   4. Ask Gemini to produce a structured CopilotAnswer (answer + evidence +
+//   4. Ask Qwen to produce a structured CopilotAnswer (answer + evidence +
 //      reasoning + recommended actions + relevant entities).
 //   5. Normalize the model output, then attach stable record ids so the UI can
 //      link employees/candidates to their pages.
@@ -93,7 +93,7 @@ const EXCLUDED_STATUSES = ["terminated", "resigned"];
 const AI_KEYWORDS = ["ai", "ml", "data", "llm", "model", "machine learning", "prompt", "analytics"];
 
 const SYSTEM_GUARDRAILS = [
-  "You are WorkforceIQ's HR analytics AI ('Workforce Copilot'). You reason ONLY over the structured workforce data provided to you — never invent facts, names, or numbers.",
+  "You are Nexus HR's HR analytics AI ('Workforce Copilot'). You reason ONLY over the structured workforce data provided to you — never invent facts, names, or numbers.",
   "NEVER use or infer protected characteristics (gender, age, race, ethnicity, religion, marital or family status, disability, nationality) for any analysis.",
   "Never present a decision as definitive. Frame estimates probabilistically ('the risk estimate indicates elevated attrition risk') rather than 'this employee WILL leave'.",
   "Every evidence item must be a real number or fact verbatim from the provided context. If the data is thin, lower confidence and say so.",
@@ -574,7 +574,7 @@ function buildContextString(intent: CopilotIntent, ctx: CopilotContext): string 
 }
 
 // ---------------------------------------------------------------------------
-// 6. Gemini call
+// 6. Qwen call
 // ---------------------------------------------------------------------------
 
 function buildPrompt(ctx: CopilotContext, contextString: string): string {

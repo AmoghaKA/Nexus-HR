@@ -590,12 +590,18 @@ export interface MyPerformance {
   reviews: EmployeeReview[];
   feedback: EmployeeFeedback[];
   attendanceRate: number | null;
+  recentAttendance: { date: string; status: string }[];
 }
 
 export async function fetchMyPerformance(): Promise<MyPerformance | null> {
   const detail = await fetchEmployeeDetailSelf();
   if (!detail) return null;
-  return { reviews: detail.reviews, feedback: detail.feedback, attendanceRate: detail.attendanceRate };
+  return {
+    reviews: detail.reviews,
+    feedback: detail.feedback,
+    attendanceRate: detail.attendanceRate,
+    recentAttendance: detail.recentAttendance,
+  };
 }
 
 export async function fetchMySkills(): Promise<{ skills: EmployeeDetail["skills"] } | null> {

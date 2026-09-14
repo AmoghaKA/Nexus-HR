@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- WorkforceIQ — AI Recruitment Intelligence Engine (migration 0003)
+-- Nexus HR — AI Recruitment Intelligence Engine (migration 0003)
 -- ---------------------------------------------------------------------------
 -- Run this file in the Supabase dashboard (SQL Editor → New query → paste →
 -- Run). Wraps the jobs/candidates tables in the fields the Recruitment

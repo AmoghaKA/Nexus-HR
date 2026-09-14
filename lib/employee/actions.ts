@@ -243,3 +243,37 @@ export async function toggleOnboardingTask(taskId: string, done: boolean): Promi
     return { ok: false, error: messageOf(error, "Something went wrong updating the task.") };
   }
 }
+
+export interface UpdateProfileInput {
+  location?: string;
+}
+
+/** Updates the employee's own profile fields. RLS restricts to own row. */
+export async function updateEmployeeProfile(input: UpdateProfileInput): Promise<EmployeeActionResult> {
+  try {
+    const supabase = await getUserSupabase();
+    if (!supabase) return { ok: false, error: "Supabase is not configured." };
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "You are not signed in." };
+
+    const updates: Record<string, unknown> = {};
+    if (input.location !== undefined) updates.location = input.location?.trim() || null;
+
+    if (Object.keys(updates).length === 0) {
+      return { ok: false, error: "Nothing to update." };
+    }
+
+    const { error } = await supabase
+      .from("employees")
+      .update(updates)
+      .eq("profile_id", user.id);
+    if (error) return { ok: false, error: `Failed to update profile: ${error.message}` };
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: messageOf(error, "Something went wrong updating your profile.") };
+  }
+}

@@ -5,22 +5,34 @@ import { createOpenAiProvider } from "@/lib/ai/openai-compatible";
 // ---------------------------------------------------------------------------
 // AI provider router.
 //
-// Exposes a `generateStructuredJSON` with the SAME signature as the original
-// Gemini entry point, so callers in `lib/ai/features.ts` are unchanged.
-//
-// The router tries the first configured provider, and when it errors (free
-// tier rate limit, timeout, dead endpoint, rejected key, unavailable model)
-// automatically falls through to the next configured provider. Providers that
-// fail with an outage-class error are put on a short in-memory cooldown so
-// subsequent requests skip straight to a healthy provider instead of hammering
-// a rate-limited one.
+// Qwen is the primary AI engine (reasoning, content generation, and
+// decision-making). It is served over DashScope's OpenAI-compatible endpoint,
+// and the router automatically falls back to the next configured provider only
+// when Qwen is unavailable (free-tier rate limit, timeout, rejected key,
+// unavailable model) so callers in `lib/ai/features.ts` are unchanged.
+// Providers that fail with an outage-class error are put on a short in-memory
+// cooldown so subsequent requests skip straight to a healthy provider instead
+// of hammering a rate-limited one.
 //
 // Server-side only (relies on process.env and in-memory state).
 // ---------------------------------------------------------------------------
 
-type RuntimeProviderId = "gemini" | "openrouter" | "groq" | "mistral";
+type RuntimeProviderId = "qwen" | "gemini" | "openrouter" | "groq" | "mistral";
 
 const ALL_PROVIDERS: AiProvider[] = [
+  createOpenAiProvider({
+    id: "qwen",
+    name: "Qwen (DashScope)",
+    baseUrl:
+      process.env.QWEN_BASE_URL ??
+      "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    apiKey: process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY || "",
+    defaultModels: [
+      process.env.QWEN_MODEL || "qwen-max",
+      "qwen-plus",
+      "qwen-turbo",
+    ],
+  }),
   {
     id: "gemini",
     name: "Google Gemini",
@@ -39,8 +51,8 @@ const ALL_PROVIDERS: AiProvider[] = [
       "google/gemma-4-31b-it:free",
     ],
     extraHeaders: {
-      "HTTP-Referer": "https://workforceiq.local",
-      "X-Title": "WorkforceIQ",
+      "HTTP-Referer": "https://nexushr.local",
+      "X-Title": "Nexus HR",
     },
   }),
   createOpenAiProvider({
@@ -59,7 +71,7 @@ const ALL_PROVIDERS: AiProvider[] = [
   }),
 ];
 
-const DEFAULT_ORDER: RuntimeProviderId[] = ["gemini", "openrouter", "groq", "mistral"];
+const DEFAULT_ORDER: RuntimeProviderId[] = ["qwen", "gemini", "openrouter", "groq", "mistral"];
 
 const COOLDOWN_MS = Math.max(0, Number(process.env.AI_PROVIDER_COOLDOWN_MS ?? 5_000) || 5_000);
 
@@ -142,7 +154,7 @@ export function describeProviderConfig(): string {
  * Runs whatever model provider is available, automatically failing over
  * between configured providers when one is unavailable (rate limited,
  * unreachable, out of quota, or rejected). Same signature as the original
- * Gemini entry point, so callers are unchanged.
+ * Qwen entry point, so callers are unchanged.
  */
 export async function generateStructuredJSON<T = Record<string, unknown>>(
   options: GenerateStructuredOptions

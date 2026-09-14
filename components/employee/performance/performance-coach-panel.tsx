@@ -1,13 +1,13 @@
 "use client";
 
-import { Loader2, MessageSquareReply, Sparkles } from "lucide-react";
+import { Loader2, MessageSquareReply, Sparkles, Target } from "lucide-react";
 
 import type { PerformanceCoachActionResult } from "@/lib/ai/actions";
 import { explainPerformance } from "@/lib/ai/actions";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useAiRun } from "@/components/hr/ai-run";
 import {
+  AiAnswerFrame,
   BulletList,
   ConfidenceBadge,
   ErrorBanner,
@@ -52,24 +52,26 @@ function ReportView({
   persistError?: string;
 }) {
   return (
-    <div className="ai-gradient-border space-y-4 rounded-xl p-5">
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Badge variant="outline">
-          <Sparkles className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-          AI Performance Coach
-        </Badge>
-        <ConfidenceBadge confidence={coach.confidence} />
-        <PersistenceBadges saved={saved} persistError={persistError} noun="insight saved" />
-      </div>
-
-      <p className="text-sm leading-relaxed text-muted-foreground">{coach.headline}</p>
-
+    <AiAnswerFrame
+      title="AI Performance Coach"
+      icon={<Sparkles className="h-3 w-3" aria-hidden="true" />}
+      badges={
+        <>
+          <ConfidenceBadge confidence={coach.confidence} />
+          <PersistenceBadges saved={saved} persistError={persistError} noun="insight saved" />
+        </>
+      }
+      headline={coach.headline}
+    >
       {coach.improvement_focus.length > 0 && (
-        <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/[0.04] p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+        <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-primary">
+            <Target className="h-3.5 w-3.5" aria-hidden="true" />
             What I should improve
           </p>
-          <BulletList items={coach.improvement_focus} />
+          <div className="mt-2.5">
+            <BulletList items={coach.improvement_focus} />
+          </div>
         </div>
       )}
 
@@ -84,6 +86,6 @@ function ReportView({
 
       <RecommendedActions actions={coach.recommended_actions} />
       <AiDisclaimer />
-    </div>
+    </AiAnswerFrame>
   );
 }

@@ -12,7 +12,7 @@ const highlights = [
   },
   {
     icon: BrainCircuit,
-    title: "Gemini-powered briefings",
+    title: "Qwen-powered briefings",
     description:
       "Every stage of the employee lifecycle narrated by an AI briefing.",
   },
@@ -40,7 +40,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           <div className="[&_span]:text-white [&_div]:bg-white/10">
             <Logo showWordmark={false} />
             <span className="mt-3 block text-lg font-semibold tracking-tight">
-              WorkforceIQ
+              Nexus HR
             </span>
           </div>
         </div>
@@ -66,7 +66,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           </ul>
         </div>
         <p className="relative text-xs text-slate-400">
-          © {new Date().getFullYear()} WorkforceIQ. Hackathon build.
+          © {new Date().getFullYear()} Nexus HR. Hackathon build.
         </p>
       </aside>
 

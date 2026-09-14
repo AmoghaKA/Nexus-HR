@@ -47,12 +47,12 @@ export default async function EmployeeDashboardPage() {
         }
       />
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d1 space-y-4">
         <SectionHeading title="Your AI Workforce Brief" />
         <BriefPanel />
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d2 space-y-4">
         <SectionHeading title="Snapshot" />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {dashboard.stats.map((stat) => (
@@ -61,7 +61,7 @@ export default async function EmployeeDashboardPage() {
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d3 space-y-4">
         <SectionHeading title="Goals · Performance" />
         <div className="grid gap-4 lg:grid-cols-2">
           <ChartCard title="My Goals" description="Overdue and upcoming goals with current progress">
@@ -92,7 +92,7 @@ export default async function EmployeeDashboardPage() {
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d4 space-y-4">
         <SectionHeading title="Skills · Learning" />
         <div className="grid gap-4 lg:grid-cols-2">
           <ChartCard title="My Skills" description="Proficiency across your skill profile">
@@ -121,7 +121,7 @@ export default async function EmployeeDashboardPage() {
         </div>
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d5 space-y-4">
         <SectionHeading title="Focus for the Week" />
         <div className="grid gap-4 lg:grid-cols-3">
           <ChartCard title="Upcoming Tasks" description="Deadlines that need you">

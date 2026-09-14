@@ -1,5 +1,5 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
-import type { GeminiInsight } from "@/lib/ai/schemas";
+import type { InsightOutput } from "@/lib/ai/schemas";
 
 export type StoredCategory =
   | "attrition"
@@ -70,7 +70,7 @@ export async function saveInsights(records: InsightRecordInput[]): Promise<SaveI
 }
 
 /** Heuristic category assignment for insights produced by the workforce brief. */
-export function categoryForInsight(insight: GeminiInsight): StoredCategory {
+export function categoryForInsight(insight: InsightOutput): StoredCategory {
   const haystack = [insight.title, insight.recommended_action, ...insight.evidence, ...insight.affected_entities]
     .join(" ")
     .toLowerCase();
@@ -85,8 +85,8 @@ export function categoryForInsight(insight: GeminiInsight): StoredCategory {
   return "engagement";
 }
 
-/** Maps a normalized Gemini insight into a row ready for persistence. */
-export function toInsightRecord(insight: GeminiInsight, category?: StoredCategory): InsightRecordInput {
+/** Maps a normalized AI insight into a row ready for persistence. */
+export function toInsightRecord(insight: InsightOutput, category?: StoredCategory): InsightRecordInput {
   return {
     category: category ?? categoryForInsight(insight),
     severity: insight.severity,

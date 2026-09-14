@@ -6,9 +6,11 @@ import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 
 import type { MyOnboardingPlan } from "@/lib/employee/data";
 import { toggleOnboardingTask } from "@/lib/employee/actions";
+import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/shared/progress-bar";
+import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorBanner } from "@/components/hr/ai-shared";
 
 function planVariant(status: string): "success" | "warning" | "secondary" {
@@ -39,9 +41,10 @@ export function OnboardingTasks({ plans }: { plans: MyOnboardingPlan[] }) {
 
   if (plans.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No onboarding plans assigned yet. Your ramp-up checklist will appear here.
-      </p>
+      <EmptyState
+        title="No onboarding plans"
+        description="Your ramp-up checklist will appear here once assigned."
+      />
     );
   }
 
@@ -111,8 +114,3 @@ export function OnboardingTasks({ plans }: { plans: MyOnboardingPlan[] }) {
   );
 }
 
-function formatDate(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}

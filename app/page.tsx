@@ -71,7 +71,7 @@ const capabilities = [
 
 const pipeline = [
   { icon: Database, title: "HR Data Ingested", desc: "Recruitment, onboarding, performance, goals, skills, attendance and policies — one connected model." },
-  { icon: Radar, title: "AI Signal Detection", desc: "Each domain is analysed independently by Gemini to flag meaningful signals before they escalate." },
+  { icon: Radar, title: "AI Signal Detection", desc: "Each domain is analysed independently by Qwen to flag meaningful signals before they escalate." },
   { icon: BrainCircuit, title: "Cross-Source Reasoning", desc: "Signals are connected across domains so insights reflect the real, compound nature of workforce risk." },
   { icon: Sparkles, title: "Explainable Insights", desc: "Every insight carries evidence, reasoning, a severity level and a confidence score — never a black box." },
   { icon: Target, title: "Targeted Actions", desc: "Insights finish with concrete next steps — targeted at employees, teams, departments or recruiters." },
@@ -153,7 +153,7 @@ export default function HomePage() {
 
                 {/* Subhead */}
                 <p className="sr-fade-d2 mt-7 max-w-lg text-base leading-7 text-[#686a70] sm:text-lg">
-                  WorkforceIQ connects recruitment, onboarding, performance,
+                  Nexus HR connects recruitment, onboarding, performance,
                   skills, attendance and attrition in one living view, then turns
                   the signals into clear next steps for your team.
                 </p>
@@ -213,7 +213,7 @@ export default function HomePage() {
                       <span className="h-2.5 w-2.5 rounded-full bg-[#e5e3dd]" />
                     </div>
                     <div className="ml-2 flex-1 rounded-lg bg-white px-3 py-1.5 text-xs text-[#92928e] shadow-sm ring-1 ring-black/[0.04]">
-                      app.workforceiq.com/hr/dashboard
+                      app.nexushr.com/hr/dashboard
                     </div>
                     <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -391,7 +391,7 @@ export default function HomePage() {
                   Confident action.
                 </h2>
                 <p className="mt-5 text-[#686a70] leading-relaxed">
-                  WorkforceIQ unifies every signal into a single living view,
+                  Nexus HR unifies every signal into a single living view,
                   then AI turns those signals into explainable, actionable
                   recommendations your team can trust.
                 </p>
@@ -472,7 +472,7 @@ export default function HomePage() {
                 Explainable by design
               </p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#17191f] sm:text-4xl lg:text-5xl">
-                How WorkforceIQ thinks
+                How Nexus HR thinks
               </h2>
               <p className="mt-4 text-[#686a70]">
                 Every insight passes through the same pipeline — from raw signal
@@ -769,7 +769,7 @@ export default function HomePage() {
         <div className="border-t border-black/[0.04]">
           <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-2 px-5 py-6 text-xs text-[#92928e] sm:flex-row sm:px-8">
             <p>
-              &copy; 2026 WorkforceIQ. Demo workspace seeded with synthetic
+              &copy; 2026 Nexus HR. Demo workspace seeded with synthetic
               data.
             </p>
             <div className="flex items-center gap-4">

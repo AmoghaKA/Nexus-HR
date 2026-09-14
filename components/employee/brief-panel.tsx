@@ -5,10 +5,10 @@ import { Loader2, Sparkles } from "lucide-react";
 import type { GenerateEmployeeBriefActionResult } from "@/lib/ai/actions";
 import { generateEmployeeBrief } from "@/lib/ai/actions";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardTitle } from "@/components/ui/card";
 import { useAiRun } from "@/components/hr/ai-run";
 import {
+  AiAnswerFrame,
   BulletList,
   ConfidenceBadge,
   ErrorBanner,
@@ -66,16 +66,16 @@ function ReportView({
   persistError?: string;
 }) {
   return (
-    <div className="ai-gradient-border space-y-4 rounded-xl p-5">
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Badge variant="outline">
-          <Sparkles className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-          Your AI Workforce Brief
-        </Badge>
-        <ConfidenceBadge confidence={brief.confidence} />
-        <PersistenceBadges saved={saved} persistError={persistError} noun="insight saved" />
-      </div>
-
+    <AiAnswerFrame
+      title="Your AI Workforce Brief"
+      icon={<Sparkles className="h-3 w-3" aria-hidden="true" />}
+      badges={
+        <>
+          <ConfidenceBadge confidence={brief.confidence} />
+          <PersistenceBadges saved={saved} persistError={persistError} noun="insight saved" />
+        </>
+      }
+    >
       <div>
         <h3 className="text-lg font-semibold tracking-tight">{brief.headline}</h3>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{brief.summary}</p>
@@ -83,16 +83,21 @@ function ReportView({
 
       {brief.focus_areas.length > 0 && (
         <div className="grid gap-3 md:grid-cols-2">
-          {brief.focus_areas.map((area) => (
-            <Card key={area.area + area.why} className="p-4">
-              <CardHeader className="px-0 pb-2">
+          {brief.focus_areas.map((area, i) => (
+            <div key={`${area.area}-${i}`} className="group overflow-hidden rounded-xl border bg-card/80 transition-shadow hover:shadow-md">
+              <div
+                className="h-1 w-full bg-gradient-to-r from-primary via-indigo-500 to-violet-500 opacity-70 transition-opacity group-hover:opacity-100"
+                aria-hidden="true"
+              />
+              <CardContent className="space-y-2 p-4">
                 <CardTitle className="text-sm font-semibold">{area.area}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 px-0 py-0">
                 <p className="text-xs leading-relaxed text-muted-foreground">{area.why}</p>
-                <p className="text-xs font-medium text-card-foreground">→ {area.action}</p>
+                <p className="flex items-start gap-1.5 text-xs font-medium text-card-foreground">
+                  <span className="mt-0.5 text-primary" aria-hidden="true">→</span>
+                  {area.action}
+                </p>
               </CardContent>
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -112,6 +117,6 @@ function ReportView({
 
       <RecommendedActions actions={brief.recommended_action ? [brief.recommended_action] : []} />
       <AiDisclaimer />
-    </div>
+    </AiAnswerFrame>
   );
 }

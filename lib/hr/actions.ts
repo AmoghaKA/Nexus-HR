@@ -132,7 +132,7 @@ export async function provisionNewHire(input: NewHireInput): Promise<ProvisionNe
     const email = input.email.trim().toLowerCase();
     if (!fullName || !email) return { ok: false, error: "Full name and a valid email are required." };
 
-    const temporaryPassword = `WorkforceIQ-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36).slice(-4)}!`;
+    const temporaryPassword = `NexusHR-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36).slice(-4)}!`;
 
     const { data, error: createError } = await supabase.auth.admin.createUser({
       email,

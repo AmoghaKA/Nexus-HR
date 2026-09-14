@@ -17,7 +17,6 @@ import {
   LoadingRow,
   RecommendedActions,
 } from "@/components/hr/ai-shared";
-import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
   "Which department has the highest attrition risk and why?",
@@ -236,9 +235,9 @@ function EntityChips({
     <div className="space-y-1.5 rounded-lg border bg-muted/40 px-3 py-2.5">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
       <div className="flex flex-wrap gap-1.5">
-        {items.slice(0, 12).map((item) => (
+        {items.slice(0, 12).map((item, i) => (
           <span
-            key={item.name}
+            key={`${item.name}-${i}`}
             className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px] text-muted-foreground"
           >
             {hrefFor && item.id ? (
@@ -259,6 +258,12 @@ function EntityChips({
   );
 }
 
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+  );
+}
+
 function AnswerView({
   answer,
   intent,
@@ -267,55 +272,70 @@ function AnswerView({
   intent: string;
 }) {
   return (
-    <div className="rounded-2xl rounded-tl-sm border bg-card p-4 sm:p-5">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="overflow-hidden rounded-2xl rounded-tl-sm border bg-card shadow-sm">
+      <div className="flex flex-wrap items-center gap-2 border-b bg-gradient-to-r from-primary/[0.07] via-indigo-500/[0.05] to-transparent px-4 py-2.5">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-violet-500 px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm">
+          <Sparkles className="h-3 w-3" aria-hidden="true" />
+          Copilot
+        </span>
         <IntentBadge intent={intent} />
-        <span className="text-xs text-muted-foreground">AI Workforce Copilot</span>
-        <ConfidenceBadge confidence={answer.confidence} />
+        <span className="hidden text-xs text-muted-foreground sm:inline">Nexus HR</span>
+        <ConfidenceBadge confidence={answer.confidence} className="ml-auto" />
       </div>
 
-      <p className="mt-3 text-sm leading-relaxed text-card-foreground">{answer.answer}</p>
+      <div className="space-y-5 p-4 sm:p-5">
+        <p className="text-[15px] leading-relaxed text-card-foreground">{answer.answer}</p>
 
-      {answer.evidence.length > 0 && (
-        <div className="mt-4 space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Evidence</p>
-          <ul className="space-y-1">
-            {answer.evidence.map((e, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
-                <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary")} aria-hidden="true" />
-                <span>
-                  <span className="font-medium text-card-foreground">{e.label}</span>
-                  {": "}
-                  {e.value}
-                  {e.detail ? <span className="text-muted-foreground"> · {e.detail}</span> : null}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        {answer.evidence.length > 0 && (
+          <section className="space-y-2">
+            <SectionLabel label="Evidence" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              {answer.evidence.map((e, i) => (
+                <div key={`${e.label}-${i}`} className="rounded-xl border bg-muted/30 px-3.5 py-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {e.label}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold leading-snug text-card-foreground">
+                    {e.value}
+                  </p>
+                  {e.detail && (
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{e.detail}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
-      {answer.reasoning && (
-        <div className="mt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reasoning</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{answer.reasoning}</p>
-        </div>
-      )}
+        {answer.reasoning && (
+          <section className="space-y-2">
+            <SectionLabel label="Reasoning" />
+            <div className="relative overflow-hidden rounded-xl border bg-primary/[0.03] p-4">
+              <div
+                className="absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-primary via-indigo-500 to-violet-500"
+                aria-hidden="true"
+              />
+              <p className="pl-2 text-sm leading-relaxed text-muted-foreground">{answer.reasoning}</p>
+            </div>
+          </section>
+        )}
 
-      {answer.recommended_actions.length > 0 && (
-        <div className="mt-4">
-          <RecommendedActions actions={answer.recommended_actions} />
-        </div>
-      )}
+        {answer.recommended_actions.length > 0 && (
+          <section className="space-y-2">
+            <SectionLabel label="Recommended actions" />
+            <RecommendedActions actions={answer.recommended_actions} />
+          </section>
+        )}
 
-      <div className="mt-4 space-y-2">
-        <EntityChips title="Departments" items={answer.relevant_departments} />
-        <EntityChips title="Employees" items={answer.relevant_employees} hrefFor={(id) => `/hr/employees/${id}`} />
-        <EntityChips title="Candidates" items={answer.relevant_candidates} hrefFor={() => "/hr/recruitment"} />
+        <section className="space-y-2">
+          <EntityChips title="Departments" items={answer.relevant_departments} />
+          <EntityChips title="Employees" items={answer.relevant_employees} hrefFor={(id) => `/hr/employees/${id}`} />
+          <EntityChips title="Candidates" items={answer.relevant_candidates} hrefFor={() => "/hr/recruitment"} />
+        </section>
+
+        <Separator />
+        <AiDisclaimer />
       </div>
-
-      <Separator className="my-4" />
-      <AiDisclaimer />
     </div>
   );
 }

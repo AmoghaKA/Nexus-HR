@@ -3,9 +3,10 @@ import type { Schema } from "@google/generative-ai";
 // ---------------------------------------------------------------------------
 // Shared types for the AI provider layer.
 //
-// Every provider (Gemini, Groq, OpenRouter, Mistral, ...)
+// Every provider (Qwen, Gemini, Groq, OpenRouter, Mistral, ...)
 // implements the same AiProvider contract and is called through the failover
-// router in `lib/ai/router.ts`. These modules are server-side only and must
+// router in `lib/ai/router.ts`. Qwen is the primary engine; the rest are
+// automatic fallbacks. These modules are server-side only and must
 // never be imported from client components.
 // ---------------------------------------------------------------------------
 

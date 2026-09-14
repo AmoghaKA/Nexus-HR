@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// WorkforceIQ — AI support data: policies + interviews
+// Nexus HR — AI support data: policies + interviews
 // ---------------------------------------------------------------------------
 // Creates policy documents (with chunks for retrieval-grounded Q&A) and
 // interview records (with questions + submitted evaluations so the AI
@@ -55,7 +55,7 @@ const POLICY_TEXTS = [
     slug: "remote-work",
     category: "hr",
     content: [
-      "1. Purpose. This policy defines how WorkforceIQ supports flexible and remote work arrangements while preserving collaboration, fairness, and security.",
+      "1. Purpose. This policy defines how Nexus HR supports flexible and remote work arrangements while preserving collaboration, fairness, and security.",
       "2. Eligibility. Employees whose role and manager confirm remote suitability may work remotely. Team members should agree on core collaboration hours with their team.",
       "3. Scheduling and attendance. Remote days are recorded in the attendance system as 'wfh'. Employees must be available during agreed core hours and respond to messages within a reasonable window on working days.",
       "4. Equipment and security. The company provides equipment for health-safety and security requirements. Remote workers must connect through the company VPN, lock screens, and report any suspected data breach to IT immediately.",
@@ -80,7 +80,7 @@ const POLICY_TEXTS = [
     slug: "data-security",
     category: "security",
     content: [
-      "1. Purpose. This policy protects WorkforceIQ data, systems, and the data we process on behalf of customers and employees.",
+      "1. Purpose. This policy protects Nexus HR data, systems, and the data we process on behalf of customers and employees.",
       "2. Access control. Access to systems is role-based, granted on a need-to-know basis, and reviewed quarterly. Shared credentials are prohibited.",
       "3. Data handling. Employee and customer data must be handled under the data classification guidelines. Production data is never copied into personal environments or local machines outside approved tooling.",
       "4. Incidents. Any suspected breach, phishing attempt, or unusual system behavior must be reported to IT and the security team within 24 hours. Do not delete evidence.",
@@ -104,7 +104,7 @@ const POLICY_TEXTS = [
     slug: "code-of-conduct",
     category: "conduct",
     content: [
-      "1. Purpose. This policy sets expectations for respectful, professional, and ethical behavior across WorkforceIQ.",
+      "1. Purpose. This policy sets expectations for respectful, professional, and ethical behavior across Nexus HR.",
       "2. Respectful workplace. Harassment, discrimination, retaliation, and bullying are prohibited. All employees are expected to contribute to an inclusive environment.",
       "3. Conflicts of interest. Employees must disclose actual or potential conflicts of interest to HR or their manager. Gifts and entertainment from business partners must comply with the gift threshold.",
       "4. Reporting. Concerns can be raised with a manager, HR, or confidentially through the ethics channel. Retaliation against anyone reporting in good faith is prohibited.",
@@ -116,7 +116,7 @@ const POLICY_TEXTS = [
     slug: "acceptable-use",
     category: "it",
     content: [
-      "1. Purpose. This policy governs the responsible use of WorkforceIQ computers, accounts, networks, and company data.",
+      "1. Purpose. This policy governs the responsible use of Nexus HR computers, accounts, networks, and company data.",
       "2. Permitted use. Company resources are for work purposes. Occasional personal use is permitted when it does not interfere with work, consume excessive resources, or risk security.",
       "3. Prohibited use. Installing unapproved software, bypassing controls, accessing sensitive data without authorization, and using company systems for unrelated business are prohibited.",
       "4. Passwords and MFA. Multi-factor authentication is mandatory for all company accounts. Passwords must be unique and never shared.",
@@ -243,7 +243,7 @@ async function seedInterviews() {
       interview_type: type,
       status: completed ? "completed" : "scheduled",
       scheduled_at: completed ? isoDaysAgo(randInt(3, 30)) : isoDaysAhead(randInt(1, 14)),
-      meeting_link: completed ? null : `https://meet.workforceiq.demo/${hashId("m:" + cand.id).slice(0, 8)}`,
+      meeting_link: completed ? null : `https://meet.nexushr.demo/${hashId("m:" + cand.id).slice(0, 8)}`,
       notes: completed ? "Evaluations submitted." : null,
     });
 

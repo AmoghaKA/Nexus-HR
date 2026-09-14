@@ -1,6 +1,8 @@
 import type { EmployeeTraining } from "@/lib/hr/directory";
+import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
+import { EmptyState } from "@/components/shared/empty-state";
 
 function statusVariant(status: string): "success" | "warning" | "secondary" {
   if (status === "completed") return "success";
@@ -10,7 +12,12 @@ function statusVariant(status: string): "success" | "warning" | "secondary" {
 
 export function TrainingStatusList({ training }: { training: EmployeeTraining[] }) {
   if (training.length === 0) {
-    return <p className="text-sm text-muted-foreground">You are not enrolled in any courses yet.</p>;
+    return (
+      <EmptyState
+        title="Not enrolled yet"
+        description="Once your manager assigns a course, it will appear here."
+      />
+    );
   }
   return (
     <div className="space-y-3">
@@ -42,8 +49,3 @@ export function TrainingStatusList({ training }: { training: EmployeeTraining[] 
   );
 }
 
-function formatDate(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}

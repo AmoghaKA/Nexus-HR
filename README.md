@@ -1,8 +1,8 @@
-# WorkforceIQ
+# Nexus HR
 
 **Workforce Intelligence, Powered by AI.**
 
-WorkforceIQ is a full-stack HR analytics platform that connects every stage of the employee
+Nexus HR is a full-stack HR analytics platform that connects every stage of the employee
 lifecycle — recruitment, onboarding, performance, skills, attrition and policies — and reasons
 **across** those domains with AI so HR leaders know what's happening in their workforce and exactly
 what to do next.
@@ -15,7 +15,7 @@ It ships as two fully-separated workspaces:
 | **Employee Workspace** | Individual employees (self-service) | `/employee/*` |
 
 Every AI feature is backed by **real live data** (Supabase/PostgreSQL) and **real AI model calls**
-(Gemini by default, with automatic multi-provider failover) — nothing is hardcoded or canned.
+(Qwen by default, with automatic multi-provider failover) — nothing is hardcoded or canned.
 
 ---
 
@@ -40,7 +40,7 @@ Every AI feature is backed by **real live data** (Supabase/PostgreSQL) and **rea
 
 ## What the project does
 
-WorkforceIQ turns raw HR data into an **explainable, actionable AI narrative** about your workforce.
+Nexus HR turns raw HR data into an **explainable, actionable AI narrative** about your workforce.
 
 - **Understand** — one live command center: workforce health score, headcount & attendance trends,
   department composition, goal completion, performance trajectories, skill coverage and the
@@ -75,7 +75,7 @@ their own profile, and the AI is instructed to ignore protected characteristics 
 | **Skills** (`/hr/skills`) | Skill graph with coverage per skill vs requirements, top gaps, and AI-generated upskilling plans. |
 | **Onboarding** (`/hr/onboarding`) | Phase/task-level onboarding view; AI intervention suggestions for overdue and blocked plans. |
 | **Policies** (`/hr/policies`) | Policy documents with **retrieval-grounded AI Q&A** (answers cite the source document). |
-| **Reports** (`/hr/reports`) | Consolidates the health score, executive summary, attrition-by-department, top risk employees, skill gaps, recruitment funnel and onboarding health into one report, with a "How WorkforceIQ Thinks" method section. |
+| **Reports** (`/hr/reports`) | Consolidates the health score, executive summary, attrition-by-department, top risk employees, skill gaps, recruitment funnel and onboarding health into one report, with a "How Nexus HR Thinks" method section. |
 
 ### Employee workspace (`/employee/*`)
 
@@ -95,7 +95,7 @@ their own profile, and the AI is instructed to ignore protected characteristics 
 
 ## How the AI thinks
 
-Every AI insight in WorkforceIQ passes through the same 5-stage pipeline:
+Every AI insight in Nexus HR passes through the same 5-stage pipeline:
 
 ```
 Multiple HR Data Sources → AI Signal Detection → Cross-Source Reasoning → Explainable Insights → Recommended Actions
@@ -115,9 +115,9 @@ Mechanics worth knowing:
 
 - **Strict JSON contracts** — every model call passes a `responseSchema` and the output is normalized
   and validated in `lib/ai/schemas.ts` so malformed model output can never reach the UI.
-- **Multi-provider failover router** (`lib/ai/router.ts`) — tries Gemini first, then falls back to
-  OpenRouter, Groq and Mistral when a provider is unavailable (rate limit, timeout, dropped key).
-  Only providers with an API key configured are attempted.
+- **Multi-provider failover router** (`lib/ai/router.ts`) — tries Qwen (DashScope) first, then falls
+  back to Gemini, OpenRouter, Groq and Mistral when a provider is unavailable (rate limit, timeout,
+  dropped key). Only providers with an API key configured are attempted.
 - **Guardrails in the system prompt** — the model is instructed to reason only over the supplied
   data, never to fabricate names or numbers, to frame estimates probabilistically and to ignore all
   protected characteristics.
@@ -133,7 +133,7 @@ Mechanics worth knowing:
 | Framework | Next.js **16.3.5** (App Router, Turbopack, TypeScript strict) |
 | UI | React 19, Tailwind CSS v4, Radix UI primitives, Recharts |
 | Database & auth | Supabase (PostgreSQL, row-level security, storage, email auth) |
-| AI | Google Gemini (primary) with OpenRouter / Groq / Mistral failover (`@google/generative-ai`) |
+| AI | Qwen (DashScope) primary with Gemini / OpenRouter / Groq / Mistral failover |
 | PDF parsing | `pdf-parse` (resume ingestion) |
 
 ---
@@ -142,7 +142,7 @@ Mechanics worth knowing:
 
 ```
 app/
-  page.tsx                 # Marketing landing (hero, capabilities, "How WorkforceIQ Thinks")
+  page.tsx                 # Marketing landing (hero, capabilities, "How Nexus HR Thinks")
   hr/                      # HR workspace: dashboard, recruitment, employees, attrition,
                            #   workforce, performance, skills, onboarding, policies, reports, copilot
   employee/                # Employee workspace: dashboard, profile, goals, learning,
@@ -155,8 +155,8 @@ components/
   employee/                # Employee features: goals, skills, learning, performance, onboarding
 lib/
   ai/                      # All AI code:
-    router.ts              #   multi-provider failover router
-    gemini.ts / openai-compatible.ts / json.ts   # provider adapters
+    router.ts              #   multi-provider failover router (Qwen primary)
+    qwen.ts / gemini.ts / openai-compatible.ts / json.ts   # provider adapters
     schemas.ts             #   JSON output contracts + normalizers
     briefing.ts            #   workforce data package + AI briefing + health score
     copilot.ts             #   intent classification → targeted data → structured answers
@@ -181,8 +181,9 @@ types/index.ts            # shared domain types
 
 - **Node.js 20+** (the seed scripts use `--env-file`, available since Node 20.6)
 - A **Supabase project** (free tier works) — dashboard at https://supabase.com
-- A **Gemini API key** from Google AI Studio (free tier available). If you have none, the other
-  providers can be used instead — see [AI provider configuration](#ai-provider-configuration).
+- A **Qwen API key** from Alibaba Cloud Model Studio (DashScope, free quota available). If you have
+  none, Gemini / OpenRouter / Groq / Mistral keys can be used instead — see
+  [AI provider configuration](#ai-provider-configuration).
 
 ---
 
@@ -262,9 +263,9 @@ Run `curl http://localhost:3000/api/health` (or open it in the browser) to see w
 
 | Role | Email | Password | Workspace |
 | --- | --- | --- | --- |
-| HR admin | `hr@workforceiq.demo` | `WorkforceIQ-HR-2026!` | `/hr/*` |
-| HR manager | `hr.manager@workforceiq.demo` | `WorkforceIQ-HR-2026!` | `/hr/*` |
-| Employee (Engineering) | `employee@workforceiq.demo` | `WorkforceIQ-EMP-2026!` | `/employee/*` |
+| HR admin | `hr@nexushr.demo` | `NexusHR-HR-2026!` | `/hr/*` |
+| HR manager | `hr.manager@nexushr.demo` | `NexusHR-HR-2026!` | `/hr/*` |
+| Employee (Engineering) | `employee@nexushr.demo` | `NexusHR-EMP-2026!` | `/employee/*` |
 
 ---
 
@@ -308,16 +309,19 @@ if you need a clean slate.
 The router selects providers in `AI_PROVIDER_ORDER` and skips any with no API key set.
 
 ```env
-GEMINI_API_KEY=              # primary (gemini-2.5-flash / gemini-flash-latest)
+QWEN_API_KEY=                # primary (qwen-max / qwen-plus / qwen-turbo via DashScope)
+QWEN_BASE_URL=               # optional; default https://dashscope.aliyuncs.com/compatible-mode/v1
+GEMINI_API_KEY=              # automatic failover (gemini-2.5-flash / gemini-flash-latest)
 OPENROUTER_API_KEY=          # free models, text-only
 GROQ_API_KEY=                # free tier models
 MISTRAL_API_KEY=             # free tier models
-AI_PROVIDER_ORDER=gemini,openrouter,groq,mistral
+AI_PROVIDER_ORDER=qwen,gemini,openrouter,groq,mistral
 AI_PROVIDER_COOLDOWN_MS=5000 # provider skip window after an outage-class failure
 ```
 
-If only `GROQ_API_KEY` is set, Groq is used for everything. If the top provider starts failing
-mid-request, the router transparently falls back instead of breaking the feature.
+Only providers with an API key are used. If only `GROQ_API_KEY` is set, Groq is used for everything.
+If the top provider starts failing mid-request, the router transparently falls back instead of
+breaking the feature.
 
 ---
 
@@ -350,7 +354,7 @@ npm run build      # production build (includes both of the above)
 
 ## Deployment
 
-WorkforceIQ deploys anywhere Next.js runs (Vercel, a Node server, Docker, etc.).
+Nexus HR deploys anywhere Next.js runs (Vercel, a Node server, Docker, etc.).
 
 1. Set all `NEXT_PUBLIC_*` and server-side env vars from `.env.example` in the host's environment.
 2. Apply migrations `0001`–`0006` + `seed.sql` to the production Supabase project (`notify pgrst, 'reload schema';` after).
@@ -365,5 +369,5 @@ WorkforceIQ deploys anywhere Next.js runs (Vercel, a Node server, Docker, etc.).
 
 ## Legal / disclaimer
 
-WorkforceIQ is a demonstration platform. AI-generated insights and recommendations are estimates
+Nexus HR is a demonstration platform. AI-generated insights and recommendations are estimates
 derived from data — they are not guarantees and should be reviewed by HR before acting.

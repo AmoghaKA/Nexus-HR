@@ -134,7 +134,7 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
           <Badge variant="secondary">{roleLabels[role]}</Badge>
         </div>
         <CardDescription>
-          Join your company&apos;s WorkforceIQ {roleLabels[role].toLowerCase()}.
+          Join your company&apos;s Nexus HR {roleLabels[role].toLowerCase()}.
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>

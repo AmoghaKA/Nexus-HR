@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- WorkforceIQ — Intelligent Interview Agent (migration 0006)
+-- Nexus HR — Intelligent Interview Agent (migration 0006)
 -- ---------------------------------------------------------------------------
 -- Run this file in the Supabase dashboard (SQL Editor → New query → paste →
 -- Run), then reload the schema cache with:  notify pgrst, 'reload schema';

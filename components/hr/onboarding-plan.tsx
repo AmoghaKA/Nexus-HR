@@ -6,7 +6,6 @@ import { Loader2, Rocket, Sparkles } from "lucide-react";
 import type { GenerateOnboardingPlanActionResult, PickerOption } from "@/lib/ai/actions";
 import { generateOnboardingPlan, listOnboardingEmployees } from "@/lib/ai/actions";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -17,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { useAiRun } from "@/components/hr/ai-run";
 import {
+  AiAnswerFrame,
+  AiResultCard,
   ConfidenceBadge,
   ErrorBanner,
   LoadingRow,
@@ -99,47 +100,53 @@ function PlanView({
   persistError?: string;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Badge variant="outline">
-          <Sparkles className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-          ~{plan.expected_time_to_productivity_weeks} weeks to productivity
-        </Badge>
-        <ConfidenceBadge confidence={plan.confidence} />
-        <PersistenceBadges saved={saved} persistError={persistError} noun="insight saved" />
-      </div>
-
-      <p className="text-sm leading-relaxed text-muted-foreground">
-        {employeeName ? `${employeeName}: ` : ""}
-        {plan.headline}
-      </p>
-
+    <AiAnswerFrame
+      title="AI Onboarding Plan"
+      icon={<Sparkles className="h-3 w-3" aria-hidden="true" />}
+      badges={
+        <>
+          <Badge variant="outline">
+            ~{plan.expected_time_to_productivity_weeks} weeks to productivity
+          </Badge>
+          <ConfidenceBadge confidence={plan.confidence} />
+          <PersistenceBadges saved={saved} persistError={persistError} noun="insight saved" />
+        </>
+      }
+      headline={`${employeeName ? `${employeeName}: ` : ""}${plan.headline}`}
+    >
       <div className="space-y-3">
         {plan.phases.map((phase, i) => (
-          <Card key={`${phase.phase}-${i}`} className="ai-gradient-border p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+          <AiResultCard
+            key={`${phase.phase}-${i}`}
+            index={i}
+            icon={
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-xs font-semibold text-primary-foreground">
                 {i + 1}
               </span>
-              <span className="text-sm font-semibold">{phase.phase}</span>
-              <Badge variant="secondary">{phase.duration_weeks}w</Badge>
+            }
+          >
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">{phase.phase}</span>
+                <Badge variant="secondary">{phase.duration_weeks}w</Badge>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">{phase.objective}</p>
+              <ul className="space-y-1.5">
+                {phase.tasks.map((task) => (
+                  <li key={task.title} className="flex items-start gap-2 text-sm text-card-foreground">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                    <span>
+                      <span className="font-medium">{task.title}</span>
+                      {task.description && <span className="text-muted-foreground"> — {task.description}</span>}
+                      {task.owner_role && (
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">Owner: {task.owner_role}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{phase.objective}</p>
-            <ul className="mt-3 space-y-1.5">
-              {phase.tasks.map((task) => (
-                <li key={task.title} className="flex items-start gap-2 text-sm text-card-foreground">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                  <span>
-                    <span className="font-medium">{task.title}</span>
-                    {task.description && <span className="text-muted-foreground"> — {task.description}</span>}
-                    {task.owner_role && (
-                      <span className="mt-0.5 block text-[11px] text-muted-foreground">Owner: {task.owner_role}</span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
+          </AiResultCard>
         ))}
 
         {plan.phases.length === 0 && (
@@ -148,6 +155,6 @@ function PlanView({
       </div>
 
       <AiDisclaimer />
-    </div>
+    </AiAnswerFrame>
   );
 }

@@ -1,6 +1,6 @@
-# WorkforceIQ — Supabase backend
+# Nexus HR — Supabase backend
 
-WorkforceIQ runs entirely on Supabase: **PostgreSQL** (schema + Row Level
+Nexus HR runs entirely on Supabase: **PostgreSQL** (schema + Row Level
 Security), **Auth** (email/password), and **Storage** (resumes, policies,
 avatars). No other database is used.
 
@@ -24,7 +24,8 @@ Copy `.env.example` to `.env.local`:
 | `NEXT_PUBLIC_SUPABASE_URL`     | yes             | browser + server |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`| yes             | browser + server |
 | `SUPABASE_SERVICE_ROLE_KEY`    | seed + server   | server ONLY     |
-| `GEMINI_API_KEY`               | AI features     | server ONLY     |
+| `QWEN_API_KEY`             | AI features     | server ONLY     |
+| `GEMINI_API_KEY`           | AI fallback     | server ONLY     |
 
 The app still boots without env vars and shows honest "not configured" states.
 
@@ -50,9 +51,9 @@ The app still boots without env vars and shows honest "not configured" states.
 
    | Email                        | Password                | Role        |
    | ---------------------------- | ----------------------- | ----------- |
-   | `hr@workforceiq.demo`        | `WorkforceIQ-HR-2026!`  | `hr_admin`  |
-   | `hr.manager@workforceiq.demo`| `WorkforceIQ-HR-2026!`  | `hr_manager`|
-   | `employee@workforceiq.demo`  | `WorkforceIQ-EMP-2026!` | `employee`  |
+   | `hr@nexushr.demo`        | `NexusHR-HR-2026!`  | `hr_admin`  |
+   | `hr.manager@nexushr.demo`| `NexusHR-HR-2026!`  | `hr_manager`|
+   | `employee@nexushr.demo`  | `NexusHR-EMP-2026!` | `employee`  |
 
 ## Schema
 
@@ -111,9 +112,9 @@ Key points:
 ## Verification checklist
 
 1. `npm run build` and `npm run lint` pass.
-2. Sign in as `employee@workforceiq.demo` → lands on `/employee/dashboard`;
+2. Sign in as `employee@nexushr.demo` → lands on `/employee/dashboard`;
    `/hr/*` redirects away.
-3. Sign in as `hr@workforceiq.demo` → lands on `/hr/dashboard`; can read all
+3. Sign in as `hr@nexushr.demo` → lands on `/hr/dashboard`; can read all
    `employees`, `profiles`, recruitment rows; `/employee/*` redirects away.
 4. As employee, `select salary_band from employees` returns nothing (RLS
    blocks non-own rows and the view excludes the column).

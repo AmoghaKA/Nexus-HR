@@ -7,7 +7,7 @@ import { getSessionUser } from "@/lib/supabase/user";
 export const metadata: Metadata = {
   title: {
     default: "Employee Workspace",
-    template: "%s | WorkforceIQ",
+    template: "%s | Nexus HR",
   },
 };
 

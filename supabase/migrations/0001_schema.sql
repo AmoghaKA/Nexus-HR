@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- WorkforceIQ — database schema (migration 0001)
+-- Nexus HR — database schema (migration 0001)
 -- ---------------------------------------------------------------------------
 -- Run this file in the Supabase dashboard (SQL Editor → New query → paste →
 -- Run). Supabase ships with uuid generation (`gen_random_uuid()`), `auth.uid()`

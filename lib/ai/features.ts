@@ -33,7 +33,7 @@ import {
   type CareerRecommendations,
   type EmployeeAnalysis,
   type EmployeeBrief,
-  type GeminiInsight,
+  type InsightOutput,
   type InterviewEvaluation,
   type InterviewInsight,
   type InterviewQuestions,
@@ -77,11 +77,11 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { fetchEmployeeDetailSelf } from "@/lib/employee/data";
 
 // ---------------------------------------------------------------------------
-// Responsible AI guardrails — attached to every Gemini request.
+// Responsible AI guardrails — attached to every Qwen request.
 // ---------------------------------------------------------------------------
 
 const SYSTEM_GUARDRAILS = [
-  "You are WorkforceIQ's HR analytics AI. You reason ONLY over the structured workforce data provided to you — never invent facts or numbers.",
+  "You are Nexus HR's HR analytics AI. You reason ONLY over the structured workforce data provided to you — never invent facts or numbers.",
   "NEVER use or infer protected characteristics (gender, age, race, ethnicity, religion, marital or family status, disability, nationality) for attrition, performance, or any analysis.",
   "Never present a decision as definitive. Frame risk probabilistically, e.g. 'the AI risk estimate indicates elevated attrition risk' — never 'this employee WILL leave'.",
   "Every insight must be grounded in the evidence provided and must explain WHY it was generated (reasoning). If evidence is thin, reflect that in confidence and say so.",
@@ -115,10 +115,10 @@ async function persistInsights(
   return { saved: result.saved, persistError: result.error };
 }
 
-function insightFromAiInsight(i: AiInsight): GeminiInsight {
+function insightFromAiInsight(i: AiInsight): InsightOutput {
   return {
     title: i.title,
-    severity: (["low", "medium", "high", "critical"].includes(i.severity ?? "") ? i.severity! : "medium") as GeminiInsight["severity"],
+    severity: (["low", "medium", "high", "critical"].includes(i.severity ?? "") ? i.severity! : "medium") as InsightOutput["severity"],
     summary: i.summary,
     evidence: i.evidence ?? [],
     reasoning: i.reasoning ?? "",
@@ -361,7 +361,7 @@ async function callOnboardingProgressAI(ctx: { name: string; role: string; stats
 // ---------------------------------------------------------------------------
 
 export interface GenerateWorkforceBriefResult {
-  insights: GeminiInsight[];
+  insights: InsightOutput[];
   brief: { generatedAt: string; signalCount: number };
   saved: number;
   persistError?: string;
@@ -1228,7 +1228,7 @@ export async function generateSkillRecommendations(): Promise<GenerateSkillRecom
 // 5b. Workforce Skill Graph (/hr/skills)
 //
 // Deterministic aggregation (employees → skills → roles → requirements) is
-// computed here so every number is exact and repeatable; Gemini adds the
+// computed here so every number is exact and repeatable; Qwen adds the
 // business narrative, hiring-vs-upskilling recommendations.
 // ---------------------------------------------------------------------------
 
@@ -1411,7 +1411,7 @@ export interface EvaluateOnboardingProgressResult {
 }
 
 /** HR-side adaptive assessment: tracks Completed / Pending / Overdue /
- *  Blocked, then has Gemini diagnose the issue and prescribe actions. */
+ *  Blocked, then has Qwen diagnose the issue and prescribe actions. */
 export async function evaluateOnboardingProgress(employeeId: string): Promise<EvaluateOnboardingProgressResult> {
   const supabase = requireSupabase();
   const ctx = await fetchOnboardingContext(supabase, employeeId);
@@ -1964,7 +1964,7 @@ export async function generateCareerRecommendations(employeeId: string): Promise
 }
 
 // ---------------------------------------------------------------------------
-// 12. Resume analysis (Gemini structure extraction)
+// 12. Resume analysis (Qwen structure extraction)
 // ---------------------------------------------------------------------------
 
 export interface AnalyzeResumeResult {
@@ -2037,7 +2037,7 @@ export async function analyzeResume(candidateId: string): Promise<AnalyzeResumeR
 }
 
 // ---------------------------------------------------------------------------
-// 13. Candidate-job matching (deterministic scoring + Gemini reasoning)
+// 13. Candidate-job matching (deterministic scoring + Qwen reasoning)
 // ---------------------------------------------------------------------------
 
 export interface MatchCandidateResult {
@@ -2230,8 +2230,8 @@ function computeDeterministicScores(
   };
 }
 
-function blendScore(deterministic: number, gemini: number): number {
-  return Math.round(0.7 * deterministic + 0.3 * Math.max(0, Math.min(100, gemini)));
+function blendScore(deterministic: number, ai: number): number {
+  return Math.round(0.7 * deterministic + 0.3 * Math.max(0, Math.min(100, ai)));
 }
 
 async function syncCandidateSkills(
@@ -2380,34 +2380,34 @@ export async function matchCandidate(candidateId: string): Promise<MatchCandidat
     schema: candidateMatchSchema,
     temperature: 0.2,
   });
-  const gemini = normalizeCandidateMatch(parsed);
+  const ai = normalizeCandidateMatch(parsed);
 
-  const skill = blendScore(det.skill, gemini.skill_match);
-  const experience = blendScore(det.experience, gemini.experience_match);
-  const roleRelevance = blendScore(det.roleRelevance, gemini.role_relevance);
-  const education = blendScore(det.education, gemini.education_match);
+  const skill = blendScore(det.skill, ai.skill_match);
+  const experience = blendScore(det.experience, ai.experience_match);
+  const roleRelevance = blendScore(det.roleRelevance, ai.role_relevance);
+  const education = blendScore(det.education, ai.education_match);
   const overall = Math.round(skill * 0.4 + experience * 0.25 + roleRelevance * 0.2 + education * 0.15);
 
-  const missing = Array.from(new Set([...gemini.missing_requirements, ...det.missingRequiredSkills]));
+  const missing = Array.from(new Set([...ai.missing_requirements, ...det.missingRequiredSkills]));
 
   const match: CandidateMatch = {
-    candidate_name: gemini.candidate_name || candidate.full_name,
-    job_title: gemini.job_title || (job.title ?? "Role"),
+    candidate_name: ai.candidate_name || candidate.full_name,
+    job_title: ai.job_title || (job.title ?? "Role"),
     overall_match: overall,
     skill_match: skill,
     experience_match: experience,
     role_relevance: roleRelevance,
     education_match: education,
-    recommendation: gemini.recommendation,
-    summary: gemini.summary,
-    why_matches: gemini.why_matches,
+    recommendation: ai.recommendation,
+    summary: ai.summary,
+    why_matches: ai.why_matches,
     missing_requirements: missing,
-    relevant_evidence: gemini.relevant_evidence,
-    interview_focus: gemini.interview_focus,
-    strengths: gemini.strengths,
-    gaps: gemini.gaps,
-    next_step: gemini.next_step,
-    confidence: gemini.confidence,
+    relevant_evidence: ai.relevant_evidence,
+    interview_focus: ai.interview_focus,
+    strengths: ai.strengths,
+    gaps: ai.gaps,
+    next_step: ai.next_step,
+    confidence: ai.confidence,
   };
 
   const { error } = await supabase.from("candidate_assessments").upsert(
@@ -2438,7 +2438,7 @@ export async function matchCandidate(candidateId: string): Promise<MatchCandidat
 }
 
 // ---------------------------------------------------------------------------
-// 14. Candidate comparison (table + Gemini narrative)
+// 14. Candidate comparison (table + Qwen narrative)
 // ---------------------------------------------------------------------------
 
 export interface CandidateCompareRow {
@@ -2497,7 +2497,7 @@ export async function compareCandidates(candidateIds: string[]): Promise<Compare
     if (!candidateId) continue;
     if (!assessmentByCand.has(candidateId)) {
       // Assessments are persisted with overall_match; the AI normalizer reads
-      // overall_score (the Gemini field name), so map it before normalizing.
+      // overall_score (the Qwen field name), so map it before normalizing.
       const mapped = { ...row, overall_score: row.overall_match };
       assessmentByCand.set(candidateId, normalizeCandidateMatch(mapped));
     }

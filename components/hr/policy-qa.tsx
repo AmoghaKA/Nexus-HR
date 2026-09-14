@@ -75,43 +75,48 @@ export function PolicyQA() {
 
 function AnswerView({ answer }: { answer: NonNullable<AnswerPolicyQuestionActionResult["answer"]> }) {
   return (
-    <Card className="ai-gradient-border space-y-4 p-5">
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+    <Card className="ai-gradient-border overflow-hidden">
+      <div className="flex items-center gap-2.5 border-b bg-gradient-to-r from-primary/[0.07] via-indigo-500/[0.05] to-transparent px-5 py-3">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-violet-500 text-primary-foreground shadow-sm">
           <BookOpenCheck className="h-4 w-4" aria-hidden="true" />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold">Policy answer</p>
-            <ConfidenceBadge confidence={answer.confidence} />
-          </div>
-          <p className="mt-1.5 text-sm leading-relaxed text-card-foreground">{answer.answer}</p>
-        </div>
+        <p className="text-sm font-semibold">Policy answer</p>
+        <ConfidenceBadge confidence={answer.confidence} className="ml-auto" />
       </div>
 
-      {answer.citations.length > 0 && (
-        <div className="space-y-1.5 rounded-lg border bg-muted/40 px-3 py-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sources</p>
-          {answer.citations.map((c) => (
-            <p key={`${c.policy}-${c.section}`} className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
-              <Quote className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-              <span>
-                <span className="font-medium text-card-foreground">{c.policy}</span>
-                {c.section ? ` — ${c.section}` : ""}
-              </span>
-            </p>
-          ))}
+      <div className="space-y-4 p-5">
+        <div className="relative rounded-xl border bg-muted/30 p-4">
+          <div
+            className="absolute inset-y-0 left-0 w-[3px] bg-gradient-to-b from-primary via-indigo-500 to-violet-500"
+            aria-hidden="true"
+          />
+          <p className="pl-2 text-[15px] font-medium leading-relaxed text-card-foreground">{answer.answer}</p>
         </div>
-      )}
 
-      {answer.disclaimer && (
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          <Badge variant="outline" className="mr-1.5">Note</Badge>
-          {answer.disclaimer}
-        </p>
-      )}
+        {answer.citations.length > 0 && (
+          <div className="space-y-1.5 rounded-xl border bg-muted/40 px-3 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sources</p>
+            {answer.citations.map((c, i) => (
+              <p key={`${c.policy}-${c.section}-${i}`} className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
+                <Quote className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="font-medium text-card-foreground">{c.policy}</span>
+                  {c.section ? ` — ${c.section}` : ""}
+                </span>
+              </p>
+            ))}
+          </div>
+        )}
 
-      <AiDisclaimer />
+        {answer.disclaimer && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            <Badge variant="outline" className="mr-1.5">Note</Badge>
+            {answer.disclaimer}
+          </p>
+        )}
+
+        <AiDisclaimer />
+      </div>
     </Card>
   );
 }

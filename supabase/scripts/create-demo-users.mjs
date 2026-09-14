@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// WorkforceIQ — demo user seeder
+// Nexus HR — demo user seeder
 // ---------------------------------------------------------------------------
 // Creates (or updates) two confirmed auth users plus their profiles and
 // employee records, so the dashboards have real credentials after the
@@ -29,8 +29,8 @@ if (!url || !serviceRole) {
 
 const DEMO_USERS = [
   {
-    email: "hr@workforceiq.demo",
-    password: "WorkforceIQ-HR-2026!",
+    email: "hr@nexushr.demo",
+    password: "NexusHR-HR-2026!",
     fullName: "Ava Reynolds",
     appRole: "hr_admin",
     workspaceClip: "hr",
@@ -42,8 +42,8 @@ const DEMO_USERS = [
     salaryBand: "hr-band-3",
   },
   {
-    email: "hr.manager@workforceiq.demo",
-    password: "WorkforceIQ-HR-2026!",
+    email: "hr.manager@nexushr.demo",
+    password: "NexusHR-HR-2026!",
     fullName: "Liam Chang",
     appRole: "hr_manager",
     workspaceClip: "hr",
@@ -55,8 +55,8 @@ const DEMO_USERS = [
     salaryBand: "hr-band-4",
   },
   {
-    email: "employee@workforceiq.demo",
-    password: "WorkforceIQ-EMP-2026!",
+    email: "employee@nexushr.demo",
+    password: "NexusHR-EMP-2026!",
     fullName: "Maya Patel",
     appRole: "employee",
     workspaceClip: "employee",
@@ -169,9 +169,9 @@ async function main() {
   }
 
   console.log("\nDone. Sign-in users:");
-  console.log("  HR Admin : hr@workforceiq.demo        / WorkforceIQ-HR-2026!");
-  console.log("  HR Manager: hr.manager@workforceiq.demo / WorkforceIQ-HR-2026!");
-  console.log("  Employee : employee@workforceiq.demo  / WorkforceIQ-EMP-2026!");
+  console.log("  HR Admin : hr@nexushr.demo        / NexusHR-HR-2026!");
+  console.log("  HR Manager: hr.manager@nexushr.demo / NexusHR-HR-2026!");
+  console.log("  Employee : employee@nexushr.demo  / NexusHR-EMP-2026!");
 }
 
 main().catch((err) => {

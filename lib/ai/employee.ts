@@ -76,8 +76,8 @@ function insight(
 }
 
 /**
- * Builds the summarized, structured employee analysis package that the Gemini
- * service will later expand into a narrative profile. No raw rows included —
+ * Builds the summarized, structured employee analysis package that the Qwen
+ * engine will later expand into a narrative profile. No raw rows included —
  * only rollups, deltas, and derived signals.
  */
 export function buildEmployeeAnalysis(detail: EmployeeDetail): EmployeeAnalysisPackage {
@@ -250,9 +250,9 @@ function deriveEmployeeInsights(pkg: EmployeeAnalysisPackage): AiInsight[] {
   );
 }
 
-/** Renders the employee package into the prompt that the Gemini service will receive. */
+/** Renders the employee package into the prompt that the Qwen engine will receive. */
 export function prepareEmployeePrompt(pkg: EmployeeAnalysisPackage): string {
-  return `You are the WorkforceIQ HR personal-analytics assistant.
+  return `You are the Nexus HR HR personal-analytics assistant.
 
 Compose a concise, supportive, executive-friendly profile for the employee below,
 using only the summarized signals provided. Plain language, no invented facts.

@@ -92,7 +92,7 @@ export interface GenerateBriefResult {
 /**
  * HR workload: "Generate Workforce Brief".
  *
- * Flow: Supabase => data aggregation => signal detection => Gemini reasoning =>
+ * Flow: Supabase => data aggregation => signal detection => Qwen reasoning =>
  * structured, explainable insight => UI (+ persisted to ai_insights).
  */
 export async function generateWorkforceBrief(): Promise<GenerateBriefResult> {
@@ -824,7 +824,7 @@ export interface AnswerCopilotQuestionActionResult {
 /**
  * HR workload: "Ask the Workforce Copilot".
  *
- * Flow: classify intent => load targeted Supabase data => structured Gemini
+ * Flow: classify intent => load targeted Supabase data => structured Qwen
  * answer (answer/evidence/reasoning/actions/entities). Guarded server-side so
  * employee accounts cannot invoke it even if they reach the route.
  */

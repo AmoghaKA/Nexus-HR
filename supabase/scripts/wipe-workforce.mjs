@@ -7,9 +7,9 @@ const supabase = createClient(
 );
 
 const DEMO_EMAILS = [
-  "hr@workforceiq.demo",
-  "hr.manager@workforceiq.demo",
-  "employee@workforceiq.demo",
+  "hr@nexushr.demo",
+  "hr.manager@nexushr.demo",
+  "employee@nexushr.demo",
 ];
 
 const { data: seededProfiles } = await supabase
@@ -18,8 +18,8 @@ const { data: seededProfiles } = await supabase
   .eq("role", "employee")
   .not("email", "in", `(${DEMO_EMAILS.map((e) => `"${e}"`).join(",")})`);
 
-const seededIds = (seededProfiles ?? []).filter((p) => p.email?.endsWith("@workforceiq.demo")).map((p) => p.id);
-const seededEmails = new Set((seededProfiles ?? []).filter((p) => p.email?.endsWith("@workforceiq.demo")).map((p) => p.email));
+const seededIds = (seededProfiles ?? []).filter((p) => p.email?.endsWith("@nexushr.demo")).map((p) => p.id);
+const seededEmails = new Set((seededProfiles ?? []).filter((p) => p.email?.endsWith("@nexushr.demo")).map((p) => p.email));
 
 console.log("seeded profiles to wipe:", seededIds.length);
 

@@ -33,8 +33,17 @@ export default async function SkillsPage() {
         badge={<Badge variant="outline">Live data</Badge>}
       />
 
-      <section className="space-y-4">
-        <SectionHeading title="Your skill profile" />
+      <section className="sr-fade sr-fade-d1 space-y-4">
+        <SectionHeading
+          title="Your skill profile"
+          action={
+            rows.length > 0 ? (
+              <Badge variant="secondary" className="font-mono text-xs">
+                {rows.length} skill{rows.length !== 1 ? "s" : ""}
+              </Badge>
+            ) : undefined
+          }
+        />
         <Card className="p-4">
           <SkillsTable skills={rows} />
           {rows.length === 0 && (
@@ -46,7 +55,7 @@ export default async function SkillsPage() {
         </Card>
       </section>
 
-      <section className="space-y-4">
+      <section className="sr-fade sr-fade-d2 space-y-4">
         <SectionHeading title="AI Skill Plan" />
         <Card className="p-5">
           <SkillPlanPanel />
