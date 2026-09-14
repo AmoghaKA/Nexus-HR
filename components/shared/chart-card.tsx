@@ -21,7 +21,7 @@ export function ChartCard({
   contentClassName,
 }: ChartCardProps) {
   return (
-    <Card className={cn("flex flex-col p-5", className)}>
+    <Card className={cn("group flex flex-col border-border/80 bg-card/90 p-5 shadow-[0_12px_32px_hsl(195_28%_14%_/_0.05)] transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_18px_40px_hsl(195_28%_14%_/_0.09)]", className)}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-0.5">
           <h3 className="text-sm font-semibold tracking-tight">{title}</h3>

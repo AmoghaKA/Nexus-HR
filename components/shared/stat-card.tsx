@@ -29,7 +29,8 @@ export function StatCard({ stat }: { stat: StatCardData }) {
   const Icon = iconMap[stat.icon];
   const hasPositiveChange = (stat.change ?? 0) > 0;
   return (
-    <Card className="p-5 transition-shadow hover:shadow-md">
+    <Card className="relative overflow-hidden border-border/80 bg-card/90 p-5 shadow-[0_12px_32px_hsl(195_28%_14%_/_0.05)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_hsl(195_28%_14%_/_0.09)]">
+      <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-primary/5" aria-hidden="true" />
       <div className="flex items-start justify-between gap-3">
         <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
           <Icon className="h-5 w-5" aria-hidden="true" />

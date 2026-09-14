@@ -44,48 +44,48 @@
 }
 
 :root {
-  --radius: 0.75rem;
+  --radius: 0.8rem;
 
-  --background: hsl(220 25% 97%);
-  --foreground: hsl(224 22% 12%);
+  --background: hsl(42 33% 96%);
+  --foreground: hsl(195 28% 14%);
 
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(224 22% 12%);
+  --card: hsl(44 38% 99%);
+  --card-foreground: hsl(195 28% 14%);
 
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(224 22% 12%);
+  --popover: hsl(44 38% 99%);
+  --popover-foreground: hsl(195 28% 14%);
 
-  --primary: hsl(243 68% 55%);
+  --primary: hsl(173 62% 37%);
   --primary-foreground: hsl(0 0% 100%);
 
-  --secondary: hsl(220 20% 95%);
-  --secondary-foreground: hsl(224 22% 14%);
+  --secondary: hsl(38 31% 91%);
+  --secondary-foreground: hsl(195 28% 18%);
 
-  --muted: hsl(220 18% 95%);
-  --muted-foreground: hsl(220 10% 46%);
+  --muted: hsl(40 25% 92%);
+  --muted-foreground: hsl(195 12% 43%);
 
-  --accent: hsl(243 60% 96%);
-  --accent-foreground: hsl(243 60% 34%);
+  --accent: hsl(169 43% 91%);
+  --accent-foreground: hsl(173 62% 26%);
 
-  --destructive: hsl(0 72% 51%);
+  --destructive: hsl(4 72% 51%);
   --destructive-foreground: hsl(0 0% 100%);
 
-  --border: hsl(220 16% 89%);
-  --input: hsl(220 16% 86%);
-  --ring: hsl(243 68% 55%);
+  --border: hsl(38 24% 86%);
+  --input: hsl(38 24% 82%);
+  --ring: hsl(173 62% 37%);
 
-  --success: hsl(160 76% 32%);
-  --warning: hsl(38 92% 50%);
-  --danger: hsl(0 72% 51%);
-  --info: hsl(199 89% 48%);
+  --success: hsl(157 59% 32%);
+  --warning: hsl(34 88% 48%);
+  --danger: hsl(4 72% 51%);
+  --info: hsl(194 74% 40%);
 
-  --gemini: hsl(243 68% 55%);
+  --gemini: hsl(173 62% 37%);
 
-  --chart-1: hsl(243 68% 55%);
-  --chart-2: hsl(199 89% 48%);
-  --chart-3: hsl(160 76% 32%);
-  --chart-4: hsl(38 92% 50%);
-  --chart-5: hsl(278 64% 58%);
+  --chart-1: hsl(173 62% 37%);
+  --chart-2: hsl(194 74% 40%);
+  --chart-3: hsl(157 59% 32%);
+  --chart-4: hsl(34 88% 48%);
+  --chart-5: hsl(4 72% 51%);
 }
 
 * {
@@ -98,6 +98,8 @@ html {
 
 body {
   background-color: var(--background);
+  background-image: radial-gradient(circle at 10% 0%, hsl(173 62% 37% / 0.07), transparent 28rem),
+    radial-gradient(circle at 95% 12%, hsl(34 88% 48% / 0.06), transparent 24rem);
   color: var(--foreground);
   font-family: var(--font-sans);
   font-feature-settings: "cv11", "cv02";
@@ -115,7 +117,7 @@ body {
     position: relative;
     background:
       linear-gradient(var(--card), var(--card)) padding-box,
-      linear-gradient(120deg, hsl(243 68% 55%), hsl(199 89% 48%), hsl(278 64% 58%))
+      linear-gradient(120deg, hsl(173 62% 37%), hsl(194 74% 40%), hsl(34 88% 48%))
         border-box;
     border: 1px solid transparent;
   }
@@ -132,7 +134,7 @@ body {
   .sr-fade-d6 { animation-delay: 480ms; }
 
   .glow-indigo {
-    background: radial-gradient(ellipse at center, hsl(243 68% 55% / 0.08), transparent 70%);
+    background: radial-gradient(ellipse at center, hsl(173 62% 37% / 0.08), transparent 70%);
   }
 }
 

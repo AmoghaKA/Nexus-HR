@@ -92,11 +92,11 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   return (
-    <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
+    <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
       {groups.map((group, idx) => (
         <div key={idx} className="space-y-1">
           {group.label && (
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
               {group.label}
             </p>
           )}
@@ -109,9 +109,9 @@ function NavLinks({
                 href={item.href}
                 onClick={onNavigate}
                 className={cn(
-                  "group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "group flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   active
-                    ? "bg-primary text-primary-foreground shadow-sm"
+                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
                 aria-current={active ? "page" : undefined}
@@ -176,13 +176,13 @@ export function DashboardShell({
 
   const sidebar = (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 shrink-0 items-center justify-between border-b px-5">
+      <div className="flex h-20 shrink-0 items-center justify-between border-b px-5">
         <Link href={`/${variant === "hr" ? "hr" : "employee"}/dashboard`}>
           <Logo size="sm" />
         </Link>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge variant="secondary" className="hidden cursor-default sm:inline-flex">
+              <Badge variant="secondary" className="hidden cursor-default sm:inline-flex">
               {variant === "hr" ? "HR" : "Employee"}
             </Badge>
           </TooltipTrigger>
@@ -191,7 +191,7 @@ export function DashboardShell({
       </div>
       <NavLinks groups={groups} pathname={pathname} />
       <div className="border-t px-5 py-4">
-        <p className="text-xs text-muted-foreground">{tagline}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">{tagline}</p>
       </div>
     </div>
   );
@@ -220,7 +220,7 @@ export function DashboardShell({
         )}
         aria-hidden={!mobileOpen}
       >
-        <div className="flex h-16 items-center justify-between border-b px-4">
+        <div className="flex h-20 items-center justify-between border-b px-4">
           <Logo size="sm" />
           <Button
             variant="ghost"
@@ -240,7 +240,7 @@ export function DashboardShell({
 
       <div className="flex min-h-svh flex-col lg:pl-64">
         {/* Header */}
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-20 shrink-0 items-center gap-3 border-b border-border/70 bg-background/80 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -314,7 +314,7 @@ export function DashboardShell({
 
         <Separator className="lg:hidden" />
 
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
           {children}
         </main>
       </div>

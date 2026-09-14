@@ -43,12 +43,13 @@ export function RoleSelection({
   description = "Choose the workspace you'd like to access.",
 }: RoleSelectionProps) {
   return (
-    <Card className="border-none p-6 shadow-xl sm:border sm:shadow-sm">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
+    <Card className="border-border/80 bg-card/95 p-6 shadow-[0_24px_70px_hsl(195_28%_14%_/_0.09)] sm:p-8">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Nexus HR</p>
+        <h2 className="text-2xl font-semibold tracking-[-0.03em]">{title}</h2>
+        <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{description}</p>
       </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+      <div className="mt-7 grid gap-3 sm:grid-cols-2">
         {roles.map((role) => {
           const Icon = role.icon;
           return (
@@ -56,7 +57,7 @@ export function RoleSelection({
               key={role.value}
               type="button"
               onClick={() => onSelect(role.value)}
-              className="group rounded-xl border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="group rounded-xl border border-border/80 bg-background/60 p-5 text-left shadow-sm transition-all hover:-translate-y-1 hover:border-primary/50 hover:bg-accent/50 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <span className="mb-4 grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                 <Icon className="h-5 w-5" aria-hidden="true" />

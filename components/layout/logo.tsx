@@ -23,7 +23,7 @@ export function Logo({
       <div
         className={cn(
           s.mark,
-          "relative grid shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary via-indigo-500 to-violet-500 text-primary-foreground shadow-sm"
+          "relative grid shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary via-cyan-700 to-slate-900 text-primary-foreground shadow-lg shadow-primary/20"
         )}
       >
         <svg

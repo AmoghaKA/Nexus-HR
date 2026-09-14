@@ -115,9 +115,9 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
   };
 
   return (
-    <Card className="border-none shadow-xl sm:border sm:shadow-sm">
+    <Card className="border-border/80 bg-card/95 shadow-[0_24px_70px_hsl(195_28%_14%_/_0.09)]">
       {onBack && (
-        <div className="p-6 pb-0">
+        <div className="p-6 pb-0 sm:px-8">
           <button
             type="button"
             onClick={onBack}
@@ -128,9 +128,9 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
           </button>
         </div>
       )}
-      <CardHeader>
+      <CardHeader className="space-y-3 p-6 sm:p-8 sm:pb-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-xl">Create your account</CardTitle>
+          <CardTitle className="text-2xl tracking-[-0.03em]">Create your account</CardTitle>
           <Badge variant="secondary">{roleLabels[role]}</Badge>
         </div>
         <CardDescription>
@@ -138,7 +138,7 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5 px-6 sm:px-8">
           <div className="space-y-1.5">
             <Label htmlFor="name">Full name</Label>
             <div className="relative">
@@ -153,7 +153,7 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
                 placeholder="Ada Lovelace"
                 autoComplete="name"
                 required
-                className="pl-9"
+                className="h-11 rounded-lg pl-9"
               />
             </div>
           </div>
@@ -171,7 +171,7 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
                 placeholder="you@company.com"
                 autoComplete="email"
                 required
-                className="pl-9"
+                className="h-11 rounded-lg pl-9"
               />
             </div>
           </div>
@@ -190,7 +190,7 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
                 autoComplete="new-password"
                 required
                 minLength={8}
-                className="pl-9"
+                className="h-11 rounded-lg pl-9"
               />
             </div>
           </div>
@@ -203,8 +203,8 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
             </p>
           )}
         </CardContent>
-        <CardContent className="pt-0">
-          <Button type="submit" className="w-full" disabled={loading}>
+        <CardContent className="px-6 pt-0 sm:px-8">
+          <Button type="submit" className="h-11 w-full rounded-lg" disabled={loading}>
             {loading ? "Creating account…" : "Create account"}
           </Button>
           {!isSupabaseConfigured && (
@@ -215,7 +215,7 @@ export function SignUpForm({ role, onBack }: SignUpFormProps) {
           )}
         </CardContent>
       </form>
-      <CardFooter className="justify-center">
+      <CardFooter className="justify-center px-6 pb-7 sm:px-8">
         <p className="text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link

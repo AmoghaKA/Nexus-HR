@@ -111,9 +111,9 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
   };
 
   return (
-    <Card className="border-none shadow-xl sm:border sm:shadow-sm">
+    <Card className="border-border/80 bg-card/95 shadow-[0_24px_70px_hsl(195_28%_14%_/_0.09)]">
       {onBack && (
-        <div className="p-6 pb-0">
+        <div className="p-6 pb-0 sm:px-8">
           <button
             type="button"
             onClick={onBack}
@@ -124,17 +124,17 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
           </button>
         </div>
       )}
-      <CardHeader>
+      <CardHeader className="space-y-3 p-6 sm:p-8 sm:pb-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-xl">Welcome back</CardTitle>
+          <CardTitle className="text-2xl tracking-[-0.03em]">Welcome back</CardTitle>
           <Badge variant="secondary">{roleLabels[role]}</Badge>
         </div>
         <CardDescription>
-          Sign in to your Nexus HR {roleLabels[role].toLowerCase()}.
+          Sign in to your {roleLabels[role].toLowerCase()}.
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5 px-6 sm:px-8">
           <div className="space-y-1.5">
             <Label htmlFor="email">Work email</Label>
             <div className="relative">
@@ -149,7 +149,7 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
                 placeholder="you@company.com"
                 autoComplete="email"
                 required
-                className="pl-9"
+                className="h-11 rounded-lg pl-9"
               />
             </div>
           </div>
@@ -167,7 +167,7 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
                 placeholder="••••••••"
                 autoComplete="current-password"
                 required
-                className="pl-9"
+                className="h-11 rounded-lg pl-9"
               />
             </div>
           </div>
@@ -180,8 +180,8 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
             </p>
           )}
         </CardContent>
-        <CardContent className="pt-0">
-          <Button type="submit" className="w-full" disabled={loading}>
+        <CardContent className="px-6 pt-0 sm:px-8">
+          <Button type="submit" className="h-11 w-full rounded-lg" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </Button>
           {!isSupabaseConfigured && (
@@ -192,7 +192,7 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
           )}
         </CardContent>
       </form>
-      <CardContent className="pt-0">
+      <CardContent className="px-6 pt-1 sm:px-8">
         <div className="flex items-center gap-3 py-2">
           <Separator className="flex-1" />
           <span className="text-xs text-muted-foreground">or</span>
@@ -201,7 +201,7 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
         <Button
           type="button"
           variant="outline"
-          className="w-full"
+          className="h-11 w-full rounded-lg"
           onClick={() =>
             setNotice(
               "SSO / Google sign-in will be enabled with Supabase Auth in Phase 2."
@@ -211,7 +211,7 @@ export function SignInForm({ role, onBack }: SignInFormProps) {
           Continue with Google
         </Button>
       </CardContent>
-      <CardFooter className="justify-center">
+      <CardFooter className="justify-center px-6 pb-7 sm:px-8">
         <p className="text-sm text-muted-foreground">
           New to Nexus HR?{" "}
           <Link
