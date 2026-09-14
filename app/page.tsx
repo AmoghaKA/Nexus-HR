@@ -29,59 +29,59 @@ const capabilities = [
     icon: Bot,
     tag: "Conversational",
     title: "AI Workforce Copilot",
-    desc: "Ask natural-language questions about attrition, performance, hiring or onboarding — answered from your live data.",
+    desc: "Ask questions about attrition, performance, hiring or onboarding and get answers grounded in your workforce data.",
     stat: "10+ intent types",
   },
   {
     icon: HeartPulse,
     tag: "Predictive",
     title: "Attrition Intelligence",
-    desc: "Predict retention risk per employee, surface the factors driving risk, and recommend targeted interventions.",
+    desc: "See retention risk by employee, understand the signals behind it, and plan targeted follow-up.",
     stat: "Risk 0–100",
   },
   {
     icon: Briefcase,
     tag: "Recruiting",
     title: "Recruitment Intelligence",
-    desc: "AI-matched candidates per role with strengths, gaps and an overall match score to guide shortlisting.",
+    desc: "Review candidates by role with strengths, gaps and match signals to support consistent shortlisting.",
     stat: "Match scoring",
   },
   {
     icon: TrendingUp,
     tag: "Performance",
     title: "Performance Intelligence",
-    desc: "Combine review ratings, attendance patterns and goal progress into clear manager action plans.",
+    desc: "Bring review ratings, attendance patterns and goal progress together for focused manager action.",
     stat: "Multi-signal",
   },
   {
     icon: Layers,
     tag: "Skills",
     title: "Skill Intelligence",
-    desc: "Map every skill in your org against role requirements, highlight gaps, and generate upskilling plans.",
+    desc: "Compare team skills with role requirements, highlight coverage gaps, and plan development steps.",
     stat: "Graph analysis",
   },
   {
     icon: GraduationCap,
     tag: "Onboarding",
     title: "Adaptive Onboarding",
-    desc: "Track onboarding plans task-by-task, flag delays and blockers, and adapt when plans need intervention.",
+    desc: "Track onboarding task by task, spot delays and blockers, and keep each plan moving forward.",
     stat: "Task-level",
   },
 ] as const;
 
 const pipeline = [
-  { icon: Database, title: "HR Data Ingested", desc: "Recruitment, onboarding, performance, goals, skills, attendance and policies — one connected model." },
-  { icon: Radar, title: "AI Signal Detection", desc: "Each domain is analysed independently by Qwen to flag meaningful signals before they escalate." },
-  { icon: BrainCircuit, title: "Cross-Source Reasoning", desc: "Signals are connected across domains so insights reflect the real, compound nature of workforce risk." },
-  { icon: Sparkles, title: "Explainable Insights", desc: "Every insight carries evidence, reasoning, a severity level and a confidence score — never a black box." },
-  { icon: Target, title: "Targeted Actions", desc: "Insights finish with concrete next steps — targeted at employees, teams, departments or recruiters." },
+  { icon: Database, title: "Workforce data connected", desc: "Recruitment, onboarding, performance, goals, skills, attendance and policies come together in one workspace." },
+  { icon: Radar, title: "Signals surfaced", desc: "AI reviews each domain to highlight meaningful changes, risks and opportunities." },
+  { icon: BrainCircuit, title: "Context brought together", desc: "Signals are connected across domains so teams can see the wider context behind workforce trends." },
+  { icon: Sparkles, title: "Insights explained", desc: "Insights include supporting evidence, reasoning, severity and confidence so people can review them clearly." },
+  { icon: Target, title: "Next steps made practical", desc: "Turn findings into focused actions for employees, managers, departments and recruiters." },
 ] as const;
 
 export default function HomePage() {
   return (
     <div className="flex min-h-svh flex-col overflow-hidden bg-[#fafaf8] text-[#17191f]">
       {/* ── Navbar ────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 border-b border-black/[0.04] bg-[#fafaf8]/80 backdrop-blur-2xl">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-black/[0.04] bg-[#fafaf8]/90 backdrop-blur-2xl">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-5 sm:px-8">
           <Logo />
           <nav className="flex items-center gap-1">
@@ -120,7 +120,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         {/* ── Hero ──────────────────────────────────────────── */}
         <section className="relative overflow-hidden pb-20 pt-24 sm:pb-28 sm:pt-32 lg:pb-36 lg:pt-40">
           {/* Background */}
@@ -139,13 +139,13 @@ export default function HomePage() {
                     <BrainCircuit className="h-3 w-3 text-[#3e43d8]" />
                   </span>
                   <span className="text-xs font-semibold tracking-wide text-[#3e43d8]">
-                    AI-powered people intelligence
+                    AI-powered workforce intelligence
                   </span>
                 </div>
 
                 {/* Headline */}
                 <h1 className="sr-fade-d1 text-5xl font-bold leading-[1.05] tracking-[-0.03em] text-[#17191f] sm:text-6xl lg:text-7xl">
-                  A clearer view of your{" "}
+                  One connected view of your{" "}
                   <span className="bg-gradient-to-r from-[#3e43d8] via-[#7c3aed] to-[#3e43d8] bg-clip-text text-transparent">
                     people.
                   </span>
@@ -153,9 +153,9 @@ export default function HomePage() {
 
                 {/* Subhead */}
                 <p className="sr-fade-d2 mt-7 max-w-lg text-base leading-7 text-[#686a70] sm:text-lg">
-                  Nexus HR connects recruitment, onboarding, performance,
-                  skills, attendance and attrition in one living view, then turns
-                  the signals into clear next steps for your team.
+                  Nexus HR brings recruitment, onboarding, performance, skills,
+                  attendance and attrition into one workspace, then turns the
+                  connected signals into clear next steps for your team.
                 </p>
 
                 {/* CTAs */}
@@ -165,8 +165,8 @@ export default function HomePage() {
                     size="lg"
                     className="h-12 rounded-full bg-[#17191f] px-7 text-white shadow-xl shadow-[#17191f]/15 transition-all hover:scale-[1.02] hover:bg-[#2b2d35] hover:shadow-2xl"
                   >
-                    <Link href="/hr/dashboard">
-                      Open HR command center <ArrowRight className="h-4 w-4" />
+                    <Link href="/login">
+                      Explore the HR workspace <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
                   <Button
@@ -175,8 +175,8 @@ export default function HomePage() {
                     variant="outline"
                     className="h-12 rounded-full border-[#d2d0ca] bg-white/70 px-7 text-[#4e5056] backdrop-blur-sm transition-all hover:border-[#b8b9ed] hover:bg-white hover:text-[#17191f]"
                   >
-                    <Link href="/employee/dashboard">
-                      View employee experience
+                    <Link href="/login">
+                      See the employee workspace
                     </Link>
                   </Button>
                 </div>
@@ -185,15 +185,15 @@ export default function HomePage() {
                 <div className="sr-fade-d4 mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-[#92928e]">
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck className="h-3.5 w-3.5 text-[#168467]" />
-                    Privacy-first by design
+                    Role-based workspaces
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Database className="h-3.5 w-3.5 text-[#3e43d8]" />
-                    Grounded in live data
+                    Supabase-backed data
                   </span>
                   <span className="flex items-center gap-1.5">
                     <BrainCircuit className="h-3.5 w-3.5 text-[#7c3aed]" />
-                    Explainable AI
+                    Reviewable recommendations
                   </span>
                 </div>
               </div>
@@ -360,15 +360,15 @@ export default function HomePage() {
                   Clarity is nowhere.
                 </h2>
                 <p className="mt-5 text-[#686a70] leading-relaxed">
-                  Recruitment in one system, performance reviews in another,
-                  attendance and goals in spreadsheets. HR leaders spend hours
-                  compiling reports instead of acting on what matters.
+                  Recruitment, performance, attendance and goals often live in
+                  separate places. HR leaders spend too much time compiling
+                  updates instead of acting on what matters.
                 </p>
                 <ul className="mt-7 space-y-3">
                   {[
-                    "Hours wasted every week on manual data aggregation",
-                    "Insights arrive too late to prevent attrition",
-                    "No single view of employee health across the lifecycle",
+                    "Time lost assembling updates from separate sources",
+                    "Important workforce signals are easy to miss",
+                    "No shared view across the employee lifecycle",
                   ].map((item) => (
                     <li
                       key={item}
@@ -391,15 +391,15 @@ export default function HomePage() {
                   Confident action.
                 </h2>
                 <p className="mt-5 text-[#686a70] leading-relaxed">
-                  Nexus HR unifies every signal into a single living view,
-                  then AI turns those signals into explainable, actionable
-                  recommendations your team can trust.
+                  Nexus HR brings the signals into one shared view, then AI
+                  turns them into explainable recommendations your team can
+                  review and act on.
                 </p>
                 <ul className="mt-7 space-y-3">
                   {[
-                    "Live workforce health score across 7 categories",
-                    "AI-generated insights with evidence and confidence",
-                    "One click from insight to targeted action plan",
+                    "Workforce health score across seven categories",
+                    "AI insights with evidence and confidence",
+                    "Focused action plans for the signals that matter",
                   ].map((item) => (
                     <li
                       key={item}
@@ -431,8 +431,8 @@ export default function HomePage() {
                 Everything your HR team needs — in one place.
               </h2>
               <p className="mt-4 text-[#686a70]">
-                Six AI-powered modules, connected by a shared intelligence
-                layer.
+                Connected tools for workforce planning, people operations and
+                employee growth.
               </p>
             </div>
 
@@ -475,8 +475,8 @@ export default function HomePage() {
                 How Nexus HR thinks
               </h2>
               <p className="mt-4 text-[#686a70]">
-                Every insight passes through the same pipeline — from raw signal
-                to explainable, actionable recommendation.
+                Every insight follows the same path — from workforce signal to
+                explainable recommendation.
               </p>
             </div>
 
@@ -529,7 +529,7 @@ export default function HomePage() {
                     {
                       icon: ShieldCheck,
                       t: "Evidence-backed",
-                      d: "Every claim references real data from your HRIS.",
+                      d: "Recommendations are grounded in the data available in your workspace.",
                     },
                     {
                       icon: Target,
@@ -539,7 +539,7 @@ export default function HomePage() {
                     {
                       icon: BrainCircuit,
                       t: "Cross-source reasoning",
-                      d: "Signals connected across domains for compound insights.",
+                      d: "Signals connected across domains for better context.",
                     },
                   ].map((x) => (
                     <div key={x.t} className="flex items-start gap-3.5">
@@ -630,8 +630,8 @@ export default function HomePage() {
               See your workforce clearly.
             </h2>
             <p className="mx-auto mt-5 max-w-lg text-base text-[#686a70]">
-              Ready-to-explore workspace seeded with realistic data. No setup
-              required.
+              Explore the seeded demo workspace with realistic synthetic data.
+              Sign in to choose an HR or employee experience.
             </p>
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button
@@ -639,8 +639,8 @@ export default function HomePage() {
                 size="lg"
                 className="h-12 rounded-full bg-[#17191f] px-8 text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-[#2b2d35]"
               >
-                <Link href="/hr/dashboard">
-                  Open HR command center <ArrowRight className="h-4 w-4" />
+                <Link href="/login">
+                  Explore the HR workspace <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button
@@ -649,8 +649,8 @@ export default function HomePage() {
                 variant="outline"
                 className="h-12 rounded-full border-[#d2d0ca] px-8 text-[#4e5056] transition-all hover:border-[#b8b9ed] hover:bg-white"
               >
-                <Link href="/employee/dashboard">
-                  View employee experience
+                <Link href="/login">
+                  See the employee workspace
                 </Link>
               </Button>
             </div>
@@ -664,8 +664,7 @@ export default function HomePage() {
           <div className="lg:col-span-2">
             <Logo size="sm" />
             <p className="mt-3 max-w-[260px] text-xs leading-5 text-[#92928e]">
-              Workforce intelligence that explains itself — built for HR leaders
-              and the people they support.
+              Connected workforce intelligence for HR teams and employees.
             </p>
           </div>
           <div>
@@ -694,7 +693,7 @@ export default function HomePage() {
                   href="/hr/dashboard"
                   className="transition-colors hover:text-[#3e43d8]"
                 >
-                  Command center
+                  HR workspace
                 </Link>
               </li>
             </ul>
